@@ -1,0 +1,18 @@
+# Custom Elastic Package Registry image — the "distribution" image
+# Elastic recommends for air-gapped use, built locally:
+# official package-registry base + integration zips and signatures
+# baked in under /packages/ (the path config.docker.yml serves from).
+#
+# Build context is dist/epr/ (contains packages/).
+ARG BASE_IMAGE=docker.elastic.co/package-registry/package-registry:v1.41.2
+FROM ${BASE_IMAGE}
+
+USER root
+# config.docker.yml's package_paths is /packages/package-registry
+COPY --chown=1000:0 packages/ /packages/package-registry/
+USER 1000
+
+# Custom-built integrations are unsigned — only Elastic can sign
+# packages — so the signature requirement must be off. Official
+# packages still carry and serve their .zip.sig files.
+ENV EPR_REQUIRE_PACKAGE_SIGNATURES=false

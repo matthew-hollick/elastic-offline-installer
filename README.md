@@ -44,6 +44,7 @@ task package                          # verify checksums + tar dist/ -> elastic-
 - `dist/web/` -> `/opt/ear-web` — Caddy binary + `Caddyfile` + `ear.service` (create the `caddy` user per the unit comments; edit the hostname in `Caddyfile` to match the cert SAN)
 - TLS certificates are issued inside the offline environment — install them at deploy time: `cat server.crt ca-chain.pem > /opt/ear-web/tls/cert.pem` and `key.pem` alongside (0600, owned by `caddy`)
 - `dist/epr/` -> `/opt/epr` — package-registry binary + `config.yml` + `epr.service` + `packages/` (create the `epr` user)
+- `dist/containers/elastic-epr-<version>.tar.gz` — alternative EPR deployment as a container (Elastic's recommended "distribution" image: registry + all packages baked in): `gunzip -c elastic-epr-<version>.tar.gz | docker load` then run with the registry port published (see the podman/systemd example in Elastic's air-gapped docs)
 - `dist/containers/` -> `gunzip -c <file>.tar.gz | docker load`
 
 Note on TLS and agents: Elastic Agent cannot pin trust for artifact downloads — either install the CA into each host's system trust store and use `https://`, or point agent binary sources at the `http://` endpoint (both are served).

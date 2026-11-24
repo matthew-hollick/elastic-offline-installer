@@ -57,7 +57,18 @@ tasks:
 
   build:
     desc: Build all components
-    deps: [build:epr]
+    deps: [build:epr, build:epr-image]
+
+  build:epr-image:
+    desc: "EPR distribution image (registry+packages) via buildah container"
+    deps: [download:integrations]
+    env:
+      STACK_VERSION: "{{.STACK_VERSION}}"
+      CONTAINER_PLATFORM: "{{.CONTAINER_PLATFORM}}"
+      EPR_VERSION: "{{.EPR_VERSION}}"
+      OUT_DIR: "{{.DIST_DIR}}/containers"
+      PACKAGES_DIR: "{{.DIST_DIR}}/epr/packages"
+    cmds: [./scripts/build_epr_image.sh]
 
   build:integration:
     desc: "Build a custom integration zip. Usage: task build:integration -- <git-url> [subdir] [ref]"
