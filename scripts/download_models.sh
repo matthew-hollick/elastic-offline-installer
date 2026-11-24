@@ -3,8 +3,9 @@
 # serve them as the xpack.ml.model_repository for an air-gapped cluster
 # (Elastic's documented alternative to ml-models.elastic.co).
 #
-# Each model is three files: <id>.metadata.json, <id>.pt, <id>.vocab.json.
-# The .pt is sha256-verified against the metadata manifest.
+# Each model is three files: <id>.metadata.json, <id>.pt, <vocab-file>.
+# metadata.json is always refreshed — it carries the sha256/size the .pt
+# must match, so an upstream change re-downloads the weights.
 #
 #   ML_MODELS="elser_model_2_linux-x86_64 rerank-v1" ./scripts/download_models.sh
 #
@@ -21,24 +22,46 @@ OUT_DIR="$(realpath -m "${OUT_DIR:-dist/ear/models}")"
 BASE="https://ml-models.elastic.co"
 
 mkdir -p "$OUT_DIR"
+read -ra models <<< "$ML_MODELS"
+((${#models[@]})) || { echo "error: ML_MODELS is empty" >&2; exit 1; }
 
-for model in $ML_MODELS; do
+fetch() {
+  local url="$1" dest="$2"
+  echo "  downloading: $(basename "$dest")"
+  curl -fsSL --retry 3 -o "$dest.part" "$url"
+  mv "$dest.part" "$dest"
+}
+
+for model in "${models[@]}"; do
   echo "== $model"
-  for ext in metadata.json vocab.json pt; do
-    dest="$OUT_DIR/$model.$ext"
+
+  # always refresh the manifest — it's tiny and carries the .pt checksum
+  meta="$OUT_DIR/$model.metadata.json"
+  fetch "$BASE/$model.metadata.json" "$meta"
+  read -r sha vocab < <(python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print(d["sha256"], d.get("vocabulary_file") or "")
+' < "$meta")
+  vocab="${vocab:-$model.vocab.json}"
+
+  pt="$OUT_DIR/$model.pt"
+  # an existing .pt must still match the fresh manifest's sha256,
+  # otherwise it is stale/corrupt and gets re-downloaded
+  if [[ -f "$pt" ]] && ! echo "$sha  $pt" | sha256sum -c - >/dev/null 2>&1; then
+    rm -f "$pt"
+  fi
+
+  for f in "$vocab" "$model.pt"; do
+    dest="$OUT_DIR/$(basename "$f")"
     if [[ -f "$dest" ]]; then
-      echo "  exists: $model.$ext"
+      echo "  exists: $(basename "$dest")"
     else
-      echo "  downloading: $model.$ext"
-      curl -fsSL --retry 3 -o "$dest.part" "$BASE/$model.$ext"
-      mv "$dest.part" "$dest"
+      fetch "$BASE/$f" "$dest"
     fi
   done
 
-  # verify the model weights against the sha256 published in the manifest
-  sha=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["sha256"])' \
-        < "$OUT_DIR/$model.metadata.json")
-  echo "$sha  $OUT_DIR/$model.pt" | sha256sum -c -
+  echo "$sha  $pt" | sha256sum -c -
 done
 
 echo "== done. Serve $OUT_DIR and set xpack.ml.model_repository on each node"

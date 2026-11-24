@@ -24,11 +24,11 @@ tasks:
     silent: true
 
   download:
-    desc: Download everything (EAR artifacts, integrations, containers)
+    desc: Download everything (EAR artifacts, integrations, containers, webserver, tools)
     deps: [download:ear, download:integrations, download:containers, download:webserver, download:tools]
 
   download:ear:
-    desc: Debs (elasticsearch, kibana) + tar.gz/zip (agent, heartbeat) + sha512
+    desc: Stack artifacts (deb + tar.gz/zip + sha512/asc), GPG key, GeoIP mirror
     env:
       STACK_VERSION: "{{.STACK_VERSION}}"
       TARGET_ARCH: "{{.TARGET_ARCH}}"
@@ -49,7 +49,7 @@ tasks:
     cmds: [./scripts/download_webserver.sh]
 
   download:tools:
-    desc: Elastic support-diagnostics dist zip into dist/tools
+    desc: support-diagnostics, Temurin JRE and elastic-package into dist/tools
     env:
       DIAG_VERSION: "{{.DIAG_VERSION}}"
       OUT_DIR: "{{.DIST_DIR}}/tools"

@@ -25,7 +25,10 @@ if [[ ! -d "$src/.git" ]]; then
   git clone --depth 1 --branch "$EPR_VERSION" \
     https://github.com/elastic/package-registry "$src"
 else
-  echo "== reusing existing clone at $src"
+  echo "== fetching $EPR_VERSION into existing clone at $src"
+  # fetch to FETCH_HEAD covers tags, branches and commit SHAs uniformly
+  git -C "$src" fetch --depth 1 origin "$EPR_VERSION"
+  git -C "$src" checkout -q FETCH_HEAD
 fi
 
 echo "== building package-registry"

@@ -49,7 +49,11 @@ for img in "${images[@]}"; do
   docker run --rm -v "$OUT_DIR:/out:Z" "$SKOPEO_IMAGE" \
     copy --quiet --override-os "$os" --override-arch "$arch" \
     "docker://$img" "docker-archive:/out/$name.tar:$img"
-  gzip -f "$OUT_DIR/$name.tar"
+  # gzip to .part and rename so a kill mid-gzip can't leave a truncated
+  # tar.gz that the exists-check would skip forever
+  gzip -c "$OUT_DIR/$name.tar" > "$OUT_DIR/$name.tar.gz.part" \
+    && mv "$OUT_DIR/$name.tar.gz.part" "$OUT_DIR/$name.tar.gz"
+  rm -f "$OUT_DIR/$name.tar"
 done
 
 echo "== done. Load on the target with: gunzip -c <file>.tar.gz | docker load"

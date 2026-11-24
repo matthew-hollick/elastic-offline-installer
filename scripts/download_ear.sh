@@ -99,7 +99,7 @@ fetch "https://artifacts.elastic.co/GPG-KEY-elasticsearch" "$OUT_DIR/GPG-KEY-ela
 # (ingest.geoip.downloader.endpoint); air-gapped clusters need a mirror.
 # The upstream manifest's `url` fields are short-lived signed R2 URLs, so
 # we fetch the .tgz files now and rewrite the manifest to point at the EAR
-# (host left as __EAR_HOST__ — sed it at deploy time).
+# (host left as __EAR_BASE_URL__ — sed scheme+host in at deploy time).
 echo "== geoip databases"
 geo_dir="$OUT_DIR/geoip"
 mkdir -p "$geo_dir"
@@ -118,10 +118,10 @@ echo "$manifest" | python3 -c '
 import json, sys
 es = [e for e in json.load(sys.stdin) if e["name"].endswith(".tgz")]
 for e in es:
-    e["url"] = "https://__EAR_HOST__/geoip/" + e["name"]
+    e["url"] = "__EAR_BASE_URL__/geoip/" + e["name"]
 print(json.dumps(es, indent=1))
 ' > "$geo_dir/database.json"
-echo "  wrote geoip/database.json (rewrite __EAR_HOST__ at deploy)"
+echo "  wrote geoip/database.json (rewrite __EAR_BASE_URL__ at deploy)"
 
 echo "== verifying sha512 checksums"
 cd "$OUT_DIR"

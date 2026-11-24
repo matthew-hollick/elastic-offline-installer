@@ -13,6 +13,8 @@ import argparse
 import json
 import re
 import sys
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -21,9 +23,24 @@ EPR_URL = "https://epr.elastic.co"
 
 def version_key(version: str) -> list:
     """Sortable key for versions like '2.1.0' or '2.1.0-preview1'."""
-    return [
+    parts = [
         (0, int(p)) if p.isdigit() else (1, p) for p in re.split(r"[.-]", version)
     ]
+    # A release outranks any pre-release: '2.1.0' > '2.1.0-rc1'.
+    if not any(kind == 1 for kind, _ in parts):
+        parts.append((2, ""))
+    return parts
+
+
+def urlopen_retry(req: urllib.request.Request, retries: int = 3):
+    """urlopen with backoff — the EPR occasionally 5xxs individual files."""
+    for attempt in range(retries):
+        try:
+            return urllib.request.urlopen(req, timeout=120)
+        except (urllib.error.URLError, OSError):
+            if attempt == retries - 1:
+                raise
+            time.sleep(2**attempt)
 
 
 def fetch(url: str, dest: Path) -> str:
@@ -31,11 +48,15 @@ def fetch(url: str, dest: Path) -> str:
         return "exists"
     part = dest.with_name(dest.name + ".part")
     req = urllib.request.Request(url, headers={"User-Agent": "elastic-offline-installer"})
-    with urllib.request.urlopen(req, timeout=120) as r, open(part, "wb") as f:
-        while chunk := r.read(1 << 20):
-            f.write(chunk)
-    part.rename(dest)
-    return "downloaded"
+    try:
+        with urlopen_retry(req) as r, open(part, "wb") as f:
+            while chunk := r.read(1 << 20):
+                f.write(chunk)
+        part.rename(dest)
+        return "downloaded"
+    except Exception:
+        part.unlink(missing_ok=True)
+        raise
 
 
 def main() -> int:
@@ -56,7 +77,7 @@ def main() -> int:
     req = urllib.request.Request(
         f"{EPR_URL}/search?all=true", headers={"User-Agent": "elastic-offline-installer"}
     )
-    with urllib.request.urlopen(req, timeout=120) as r:
+    with urlopen_retry(req) as r:
         index = json.load(r)
 
     selected: list[dict] = []

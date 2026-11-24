@@ -32,12 +32,18 @@ echo "== building $IMAGE_NAME from $BASE_IMAGE + ${#zips[@]} packages ($CONTAINE
 
 # buildah runs in a container; --privileged is required for its userns
 # containers. build+push must happen in one invocation since image
-# storage lives inside the buildah container.
-docker run --rm --privileged -v "$PWD:/work:Z" -v "$OUT_DIR:/out:Z" -w /work "$BUILDAH_IMAGE" \
-  sh -c "buildah bud --platform $CONTAINER_PLATFORM \
-         --build-arg BASE_IMAGE=$BASE_IMAGE \
-         -t $IMAGE_NAME -f files/epr/Containerfile dist/epr \
-       && buildah push $IMAGE_NAME docker-archive:/out/$tar_name.tar:$IMAGE_NAME"
+# storage lives inside the buildah container. Values are passed via -e
+# and expanded inside the container, not interpolated by the host shell.
+docker run --rm --privileged \
+  -e CONTAINER_PLATFORM="$CONTAINER_PLATFORM" \
+  -e BASE_IMAGE="$BASE_IMAGE" \
+  -e IMAGE_NAME="$IMAGE_NAME" \
+  -e TAR_NAME="$tar_name" \
+  -v "$PWD:/work:Z" -v "$OUT_DIR:/out:Z" -w /work "$BUILDAH_IMAGE" \
+  sh -c 'buildah bud --platform "$CONTAINER_PLATFORM" \
+         --build-arg "BASE_IMAGE=$BASE_IMAGE" \
+         -t "$IMAGE_NAME" -f files/epr/Containerfile dist/epr \
+       && buildah push "$IMAGE_NAME" "docker-archive:/out/$TAR_NAME.tar:$IMAGE_NAME"'
 
 gzip -f "$OUT_DIR/$tar_name.tar"
 echo "== wrote $OUT_DIR/$tar_name.tar.gz"

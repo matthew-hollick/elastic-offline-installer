@@ -13,8 +13,8 @@ User=caddy
 Group=caddy
 # Caddy stores its internal CA under XDG_DATA_HOME — must be writable.
 Environment=XDG_DATA_HOME=/var/lib/caddy
-ExecStart=/opt/ear-web/caddy run --environ --config /opt/ear-web/Caddyfile
-ExecReload=/opt/ear-web/caddy reload --config /opt/ear-web/Caddyfile --force
+ExecStart=/opt/ear-web/bin/caddy run --environ --config /opt/ear-web/Caddyfile
+ExecReload=/opt/ear-web/bin/caddy reload --config /opt/ear-web/Caddyfile --force
 TimeoutStopSec=5s
 LimitNOFILE=1048576
 AmbientCapabilities=CAP_NET_BIND_SERVICE

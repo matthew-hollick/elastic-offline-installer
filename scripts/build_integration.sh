@@ -23,9 +23,15 @@ BUILD_DIR="$(realpath -m "${BUILD_DIR:-.build}")"
 TOOLS_DIR="$BUILD_DIR/tools"
 KIBANA_CONSTRAINT="${KIBANA_CONSTRAINT:-}"   # e.g. '^8.13.0 || ^9.0.0' to patch manifest
 
-for tool in git curl tar; do
+for tool in git curl tar python3; do
   command -v "$tool" >/dev/null || { echo "error: '$tool' not found" >&2; exit 1; }
 done
+
+# Validate user input before handing it to git as options.
+[[ "$REPO_URL" =~ ^(https?|git|ssh)://|^git@ ]] \
+  || { echo "error: REPO_URL must be a git URL, got '$REPO_URL'" >&2; exit 1; }
+[[ -z "$GIT_REF" || "$GIT_REF" =~ ^[A-Za-z0-9._/-]+$ ]] \
+  || { echo "error: suspicious GIT_REF '$GIT_REF'" >&2; exit 1; }
 
 # --- 1. elastic-package binary (cached in .build/tools) -------------------
 case "$(uname -m)" in
@@ -70,16 +76,43 @@ if [[ -d "$src/.git" ]]; then
   echo "== reusing clone at $src"
 else
   echo "== cloning $REPO_URL${GIT_REF:+ @$GIT_REF}"
-  git clone --depth 1 ${GIT_REF:+--branch "$GIT_REF"} "$REPO_URL" "$src"
+  git clone --depth 1 ${GIT_REF:+--branch "$GIT_REF"} -- "$REPO_URL" "$src"
 fi
 
 pkgdir="$src${SUBDIR:+/$SUBDIR}"
 [[ -f "$pkgdir/manifest.yml" ]] || { echo "error: no manifest.yml in $pkgdir" >&2; exit 1; }
 
 # Optional: relax the declared kibana.version constraint (e.g. to allow 9.x).
+# Python rather than sed: it anchors on the conditions.kibana block so a
+# stray 'version:' key elsewhere can't be hit, and the constraint value
+# never passes through sed's replacement-string metacharacters (&, \, #).
 if [[ -n "$KIBANA_CONSTRAINT" ]]; then
   echo "== patching kibana.version constraint -> $KIBANA_CONSTRAINT"
-  sed -i -E "s#^([[:space:]]+version:[[:space:]]*['\"]?)[^'\"]+#\1${KIBANA_CONSTRAINT}#" "$pkgdir/manifest.yml"
+  KIBANA_CONSTRAINT="$KIBANA_CONSTRAINT" python3 - "$pkgdir/manifest.yml" <<'PY'
+import os, re, sys
+
+path = sys.argv[1]
+new = os.environ["KIBANA_CONSTRAINT"]
+lines = open(path).read().splitlines(keepends=True)
+
+for i, line in enumerate(lines):
+    km = re.match(r"^(\s*)kibana:\s*$", line)
+    if not km:
+        continue
+    base = len(km.group(1))
+    for j in range(i + 1, len(lines)):
+        m = re.match(r"^(\s*)\S", lines[j])
+        if m and len(m.group(1)) <= base:
+            break                                   # left the kibana block
+        vm = re.match(r'^(\s*version:[ \t]*)(["\']?)(.*?)(\2)([ \t]*(?:#.*)?)$', lines[j])
+        if vm:
+            q = vm.group(2) or ""
+            lines[j] = vm.group(1) + q + new + q + vm.group(5) + "\n"
+            open(path, "w").writelines(lines)
+            sys.exit(0)
+    break
+sys.exit(f"error: no conditions.kibana.version found in {path}")
+PY
 fi
 
 # --- 3. build the package zip ---------------------------------------------
