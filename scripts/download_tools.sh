@@ -84,5 +84,6 @@ chmod +x "$OUT_DIR/elastic-package"
 # osquery package inventory with the trivy container and index findings.
 install -m 0755 files/tools/import_cvelist.py "$OUT_DIR/import_cvelist.py"
 install -m 0755 files/tools/vulnscan.py "$OUT_DIR/vulnscan.py"
+install -m 0755 files/tools/push_containers.sh "$OUT_DIR/push_containers.sh"
 install -m 0644 files/tools/vulnscan.service files/tools/vulnscan.timer "$OUT_DIR/"
-echo "== copied import_cvelist.py, vulnscan.{py,service,timer}"
+echo "== copied import_cvelist.py, vulnscan.{py,service,timer}, push_containers.sh"

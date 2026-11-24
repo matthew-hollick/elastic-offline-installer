@@ -14,6 +14,10 @@ vars:
   SNMP_EXPORTER_VERSION: v0.31.0
   TRIVY_VERSION: v0.76.2              # docker tag is the gh tag without the 'v'
   CHECKOV_VERSION: 3.4.6
+  KSM_VERSION: v2.20.0                # kube-state-metrics (registry.k8s.io)
+  GITLAB_RUNNER_VERSION: v19.6.0      # tag: gitlab/gitlab-runner:ubuntu-<ver>
+  GITLAB_RUNNER_FLAVOR: ubuntu        # ubuntu|alpine
+  AUDITOR_VERSION: 7.3.4              # cincproject/auditor (Chef InSpec, open)
   CONTAINER_PLATFORM: linux/amd64
   CADDY_VERSION: latest             # static binary serving the EAR over HTTPS
   DIAG_VERSION: latest              # elastic/support-diagnostics release tag
@@ -76,6 +80,10 @@ tasks:
       SNMP_EXPORTER_VERSION: "{{.SNMP_EXPORTER_VERSION}}"
       TRIVY_VERSION: "{{.TRIVY_VERSION}}"
       CHECKOV_VERSION: "{{.CHECKOV_VERSION}}"
+      KSM_VERSION: "{{.KSM_VERSION}}"
+      GITLAB_RUNNER_VERSION: "{{.GITLAB_RUNNER_VERSION}}"
+      GITLAB_RUNNER_FLAVOR: "{{.GITLAB_RUNNER_FLAVOR}}"
+      AUDITOR_VERSION: "{{.AUDITOR_VERSION}}"
       CONTAINER_PLATFORM: "{{.CONTAINER_PLATFORM}}"
       OUT_DIR: "{{.DIST_DIR}}/containers"
     cmds: [./scripts/save_containers.sh]
@@ -106,6 +114,11 @@ tasks:
       EPR_VERSION: "{{.EPR_VERSION}}"
       OUT_DIR: "{{.DIST_DIR}}/epr"
     cmds: [./scripts/build_epr.sh]
+
+  check:versions:
+    desc: Warn if pinned component versions are behind upstream releases
+    cmds:
+      - python3 scripts/check_versions.py
 
   verify:
     desc: Verify sha512 checksums of everything in dist/ear

@@ -33,6 +33,9 @@ There are additional containers that we need to bring with us:
 - Prometheus exporter for SNMP
 - [trivy](https://github.com/aquasecurity/trivy) `aquasec/trivy` — offline vulnerability/misconfig scanner; pair with the mirrored DBs under `feeds/trivy/`
 - [checkov](https://github.com/bridgecrewio/checkov) `bridgecrew/checkov` — IaC/policy scanner; **self-contained** — checks ship inside the image, there is no runtime "DB" to mirror (custom policies travel as your own repo; aux binaries like kustomize/helm/kubectl are only needed if you scan those framework types)
+- [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics) `registry.k8s.io/kube-state-metrics/kube-state-metrics` — exposes K8s object state as metrics for the agent's kubernetes integration
+- [GitLab Runner](https://docs.gitlab.com/runner/) `gitlab/gitlab-runner:ubuntu-*` — for executing CI pipelines on the disconnected side
+- [Cinc Auditor](https://cinc.sh/) `cincproject/auditor` — the open-source build of Chef InSpec, for compliance scanning on the disconnected side
 - [skopeo](https://github.com/containers/skopeo) + [buildah](https://github.com/containers/buildah) tool images, so the toolchain works offline too
 
 Plus tools in `dist/tools/`:
@@ -41,6 +44,7 @@ Plus tools in `dist/tools/`:
 - [`elastic-package`](https://github.com/elastic/elastic-package) (linux/amd64) — for building custom integrations on the offline side ([package-spec](https://github.com/elastic/package-spec))
 - `import_cvelist.py` — bulk-loads the mirrored cvelistV5 corpus into an ES index as ECS `vulnerability.*` docs (see [Feeds](#feeds); run with `--help` for options incl. the enrich-policy example)
 - `vulnscan.py` + `vulnscan.service`/`.timer` — centrally scans osquery package inventory with the trivy container and writes findings to `vulns-default` (see [Vulnerability scanning](#vulnerability-scanning))
+- `push_containers.sh` — loads every `dist/containers/*.tar.gz` on a docker host and pushes them to a Harbor registry, preserving upstream repo paths under your project (`docker.elastic.co/elastic-agent/elastic-agent:9.5.7` → `harbor.local/<project>/elastic-agent/elastic-agent:9.5.7`)
 
 ## Building the bundle
 
@@ -54,6 +58,8 @@ task build                            # compiles package-registry (EPR)
 task build:integration -- https://github.com/FortytwoM/elastic-nessus-integration nessus
 task package                          # verify checksums + tar dist/ -> elastic-offline-bundle-<version>.tar.gz
 ```
+
+`task check:versions` compares the pinned `Taskfile.yaml` vars against upstream latest releases and exits non-zero if anything is behind — worth running before a bundle refresh. `latest`-pinned vars (caddy, diagnostics, EPR) report what they'd resolve to.
 
 `KIBANA_CONSTRAINT='^8.13.0 || ^9.0.0'` can be set before `build:integration` to relax a package's declared `conditions.kibana.version` (see [package-spec conditions](https://github.com/elastic/package-spec)).
 
@@ -76,7 +82,7 @@ Auth is per-feed and env-gated — **a feed whose referenced env var is unset is
 "auth": { "type": "basic", "username_env": "FEED_USER", "password_env": "FEED_PASS" }
 ```
 
-The shipped config enables the CISA KEV file only; abuse.ch URLhaus + ThreatFox via [Anomali Limo](https://limo.anomali.com/) (free TAXII 2.x, guest/guest, no registration), MITRE ATT&CK, an OpenCTI collection, and a keyed template ship `enabled: false` — flip to `true` for servers your network can reach.
+The shipped config enables the CISA KEV file, the CVE List V5 baseline and the two trivy DBs; abuse.ch URLhaus + ThreatFox via [Anomali Limo](https://limo.anomali.com/) (free TAXII 2.x, guest/guest, no registration), MITRE ATT&CK, an OpenCTI collection, and a keyed template ship `enabled: false` — flip to `true` for servers your network can reach.
 
 **OpenCTI**: point `url` at your instance's `/taxii2/root` API root and `collection` at the collection's name or UUID (create one under *Data → Data sharing → TAXII Collections*, filtered however you like — e.g. indicators with score ≥ n). Export `OPENCTI_TOKEN` (a profile API key, sent as `Authorization: Bearer`). This is the recommended aggregation pattern: OpenCTI ingests whatever upstream feeds you subscribe to on the connected side, you curate one collection, and this task mirrors it. Note the `ti_opencti` integration itself is **not** mirrorable — it polls OpenCTI's GraphQL API with cursor-paginated queries and needs a live instance.
 
@@ -140,7 +146,7 @@ Alternative: `ti_custom` also has a `filestream` input that reads a STIX bundle/
 - TLS certificates are issued inside the offline environment — install them at deploy time: `cat server.crt ca-chain.pem > /opt/ear-web/tls/cert.pem` and `key.pem` alongside (0600, owned by `caddy`). Caddy [`tls` directive](https://caddyserver.com/docs/caddyfile/directives/tls) for details.
 - `rsync -a dist/epr/ /opt/epr/` — package-registry binary + `config.yml` + `epr.service` + `packages/` (create the `epr` user). Point Fleet at it via [`xpack.fleet.registryUrl`/`registryUrl` in kibana.yml](https://www.elastic.co/docs/reference/kibana/configuration-reference/fleet-settings)
 - `dist/containers/elastic-epr-<version>.tar.gz` — alternative EPR deployment as a container (Elastic's recommended "distribution" image: registry + all packages baked in): `gunzip -c elastic-epr-<version>.tar.gz | docker load` then run with the registry port published (see the podman/systemd example in [Elastic's air-gapped docs](https://www.elastic.co/docs/reference/fleet/air-gapped))
-- `dist/containers/` -> `gunzip -c <file>.tar.gz | docker load`
+- `dist/containers/` -> `gunzip -c <file>.tar.gz | docker load`, or push them all to a registry in one pass: `HARBOR=harbor.local HARBOR_PROJECT=elastic dist/tools/push_containers.sh` (dry-run with `-n`)
 - Fleet agent binary download source: `<scheme>://<ear-fqdn>/downloads/` (trailing slash matters — agents append `beats/...` to it)
 - Elastic Defend: in each Defend integration policy's advanced settings, set `advanced.artifacts.global.base_url` (and its `<os>.advanced.artifacts.global.base_url` variants) to `<scheme>://<ear-fqdn>` — agents then fetch `/downloads/endpoint/...` for detection signatures/models (see [offline endpoints guide](https://www.elastic.co/docs/solutions/security/configure-elastic-defend/configure-offline-endpoints-air-gapped-environments)). The `ETag` header is mandatory for artifact updates; Caddy's `file_server` sends it by default.
 - CISA KEVs integration: set the `url` variable to `<scheme>://<ear-fqdn>/feeds/cisa/known_exploited_vulnerabilities.json` (the `url` var is exposed in the [integration's configuration](https://www.elastic.co/docs/reference/integrations/cisa_kevs)); note the mirrored file is a point-in-time snapshot

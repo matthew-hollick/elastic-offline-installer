@@ -1,0 +1,13 @@
+new containers:
+- kube state metrics
+- gitlab/gitlab-runner
+
+need additional build tools:
+- warn if newer version of containers are available
+
+new tool for dist/tools:
+- upload all containers to a harbor registry
+
+review documentation
+
+
