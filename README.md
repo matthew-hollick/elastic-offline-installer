@@ -15,6 +15,7 @@ We need to build out an EAR (Elastic Artifact Registry) for hosting on a webserv
 - every artifact accompanied by its .sha512 checksum and .asc signature
 - `GPG-KEY-elasticsearch` at the webroot so .asc signatures can be verified offline
 - `geoip/` — GeoLite2 .tgz databases + a rewritten `database.json` manifest for `ingest.geoip.downloader.endpoint` (many integrations' geoip/enrich pipelines fail silently without this)
+- `models/` — ML trained-model artifacts (opt-in, big): `task download:models` with `ML_MODELS` defaulting to `elser_model_2_linux-x86_64` (275 MB). Available: `elser_model_2` (438 MB, cross-platform), `multilingual-e5-small[_linux-x86_64]` (423–482 MB), `rerank-v1` (777 MB)
 
 We need to build an EPR (Elastic Package Registory)
 - Consider https://github.com/elastic/custom-epr-builder but I want to run outside of Docker so that I can easilly add new integrations as they become available.
@@ -57,5 +58,6 @@ task package                          # verify checksums + tar dist/ -> elastic-
 - `dist/containers/elastic-epr-<version>.tar.gz` — alternative EPR deployment as a container (Elastic's recommended "distribution" image: registry + all packages baked in): `gunzip -c elastic-epr-<version>.tar.gz | docker load` then run with the registry port published (see the podman/systemd example in Elastic's air-gapped docs)
 - `dist/containers/` -> `gunzip -c <file>.tar.gz | docker load`
 - GeoIP: `sed -i 's/__EAR_HOST__/<ear-fqdn>/' /opt/ear/geoip/database.json`, then set `ingest.geoip.downloader.endpoint: https://<ear-fqdn>/geoip/database.json` in `elasticsearch.yml`
+- ML models (if `download:models` was run): set `xpack.ml.model_repository: http://<ear-fqdn>/models/` in `elasticsearch.yml` — Kibana's Trained Models page then "downloads" ELSER/e5/rerank from the EAR. Alternative: copy the model files into `$ES_HOME/config/models/` on all master-eligible nodes and point `xpack.ml.model_repository` at `file://${path.home}/config/models/`
 
 Note on TLS and agents: Elastic Agent cannot pin trust for artifact downloads — either install the CA into each host's system trust store and use `https://`, or point agent binary sources at the `http://` endpoint (both are served).

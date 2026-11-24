@@ -15,6 +15,7 @@ vars:
   CONTAINER_PLATFORM: linux/amd64
   CADDY_VERSION: latest             # static binary serving the EAR over HTTPS
   DIAG_VERSION: latest              # elastic/support-diagnostics release tag
+  ML_MODELS: elser_model_2_linux-x86_64   # space-separated; see download_models.sh header
   DIST_DIR: dist
 
 tasks:
@@ -53,6 +54,13 @@ tasks:
       DIAG_VERSION: "{{.DIAG_VERSION}}"
       OUT_DIR: "{{.DIST_DIR}}/tools"
     cmds: [./scripts/download_tools.sh]
+
+  download:models:
+    desc: "ML trained models into dist/ear/models (big; opt-in). ML_MODELS='elser_model_2_linux-x86_64 rerank-v1' task download:models"
+    env:
+      ML_MODELS: "{{.ML_MODELS}}"
+      OUT_DIR: "{{.DIST_DIR}}/ear/models"
+    cmds: [./scripts/download_models.sh]
 
   download:containers:
     desc: Export image tars via skopeo container ({{.CONTAINER_PLATFORM}})
