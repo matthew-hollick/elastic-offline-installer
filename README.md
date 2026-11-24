@@ -59,6 +59,9 @@ task package                          # verify checksums + tar dist/ -> elastic-
 
 - `type: "file"` — downloads `url` verbatim to `dest` (e.g. CISA KEV). `.json` dests are validated as JSON.
 - `type: "taxii"` — pulls a TAXII 2.x collection: `url` is the API root and `collection` a title substring (or exact collection `id`); alternatively `url` may point straight at a `.../collections/<id>/objects/` endpoint. All pages are followed via the `more`/`next` envelope and flattened to `{"objects": [...]}` at `dest` (default `taxii/<name>.json`). `taxii_version` defaults to `2.1` (the Accept header version; use `2.0` for older servers); `limit` sets the TAXII page-size param.
+- `type: "github-release-asset"` — resolves `releases/latest` of `repo` and downloads the first asset whose name matches the `asset` regex (for assets whose names embed the release date). `dest` is a directory; the remote filename is kept.
+
+`"skip_if_exists": true` on any feed skips it when the destination file already exists — useful for large date-versioned files.
 
 Auth is per-feed and env-gated — **a feed whose referenced env var is unset is skipped, not failed**, so key-gated feeds can stay in the config and only download once the key is exported:
 
@@ -71,6 +74,14 @@ Auth is per-feed and env-gated — **a feed whose referenced env var is unset is
 The shipped config enables the CISA KEV file only; abuse.ch URLhaus + ThreatFox via [Anomali Limo](https://limo.anomali.com/) (free TAXII 2.x, guest/guest, no registration), MITRE ATT&CK, an OpenCTI collection, and a keyed template ship `enabled: false` — flip to `true` for servers your network can reach.
 
 **OpenCTI**: point `url` at your instance's `/taxii2/root` API root and `collection` at the collection's name or UUID (create one under *Data → Data sharing → TAXII Collections*, filtered however you like — e.g. indicators with score ≥ n). Export `OPENCTI_TOKEN` (a profile API key, sent as `Authorization: Bearer`). This is the recommended aggregation pattern: OpenCTI ingests whatever upstream feeds you subscribe to on the connected side, you curate one collection, and this task mirrors it. Note the `ti_opencti` integration itself is **not** mirrorable — it polls OpenCTI's GraphQL API with cursor-paginated queries and needs a live instance.
+
+**CVE List V5** (`cvelistv5`, ~700 MB): mirrors the nightly `*_all_CVEs_at_midnight.zip.zip` release asset into `feeds/cve/` — the dated filename is its own freshness key, so same-day re-runs skip (`skip_if_exists`). It unzips to a `cves.zip` of one CVE JSON 5.0 record per file. Ways to use it offline:
+
+- **Bulk-index into ES** — one doc per record keyed by `cveMetadata.cveId` (stream the nested zip through Logstash or an `esbulk`/`_bulk` script). Gives a searchable CVE corpus: descriptions, references, CVSS/CWE, and CISA ADP containers which carry KEV status + SSVC scores (partially redundant with the KEV feed).
+- **`enrich` processor** — a `match` enrich policy on a source index keyed by `cveMetadata.cveId` decorates vulnerability findings from scanner integrations (Tenable/Qualys/Wazuh emit `vulnerability.id`) with full CVE metadata at ingest time.
+- **Local tooling** — serve the zip as-is for hosts that consume a CVE JSON5 mirror directly.
+
+`ti_custom` isn't a fit here: CVE records aren't STIX indicator objects, and indicator-match rules don't consume `vulnerability` docs.
 
 ### Serving to ti_custom
 

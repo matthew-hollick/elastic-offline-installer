@@ -36,6 +36,15 @@
       "collection": "Enterprise ATT&CK"
     },
     {
+      "name": "cvelistv5",
+      "type": "github-release-asset",
+      "description": "CVE Project CVE List V5 — nightly baseline zip of all CVE JSON 5.0 records (~700 MB, dated filename; same-day re-runs skip). Index into ES for offline CVE lookup or enrich vulnerability findings.",
+      "repo": "CVEProject/cvelistV5",
+      "asset": "_all_CVEs_at_midnight\\.zip\\.zip$",
+      "dest": "cve",
+      "skip_if_exists": true
+    },
+    {
       "name": "opencti",
       "enabled": false,
       "type": "taxii",

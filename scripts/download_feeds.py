@@ -8,6 +8,11 @@ Config: files/feeds.json — a list under "feeds". Two types:
   taxii  pull a TAXII 2.x collection (all pages) and flatten it to
          {"objects": [...]} — the shape ti_custom's CEL input maps into
          events, so the static file acts as a single-page collection
+  github-release-asset
+         download an asset (matched by "asset" regex) from the latest
+         release of "repo" — for release assets whose names contain the
+         release date and so can't use a fixed URL. For this type "dest"
+         is a directory; the remote filename is kept.
 
 Auth per feed is optional ("auth" object):
   {"type": "header", "env": "VAR", "header": "Authorization", "prefix": "Bearer "}
@@ -20,6 +25,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -129,6 +135,20 @@ def fetch_taxii(feed: dict, headers: dict) -> list:
     return objects
 
 
+def fetch_github_release(feed: dict, headers: dict) -> tuple[str, str, str]:
+    """Return (tag, asset_name, download_url) for the matching latest-release asset."""
+    api = f"https://api.github.com/repos/{feed['repo']}/releases/latest"
+    rel = get_json(api, headers, accept="application/vnd.github+json")
+    want = re.compile(feed["asset"])
+    for a in rel.get("assets", []):
+        if want.search(a["name"]):
+            return rel["tag_name"], a["name"], a["browser_download_url"]
+    known = ", ".join(a["name"] for a in rel.get("assets", []))
+    raise RuntimeError(
+        f"no asset matching /{feed['asset']}/ in {rel['tag_name']}; available: {known}"
+    )
+
+
 def write_json(dest: Path, payload) -> None:
     part = dest.with_name(dest.name + ".part")
     part.write_text(json.dumps(payload))
@@ -159,11 +179,23 @@ def run_feed(feed: dict, out: Path) -> str:
     if skip:
         return f"SKIP {name}: {skip}"
 
-    rel = Path(feed.get("dest", f"taxii/{name}.json"))
+    if feed.get("type") == "github-release-asset":
+        tag, fname, url = fetch_github_release(feed, headers)
+        rel = Path(feed.get("dest", f"github/{name}")) / fname
+    else:
+        rel = Path(feed.get("dest", f"taxii/{name}.json"))
+        tag = url = None
     dest = out / rel
     if rel.is_absolute() or not dest.resolve().is_relative_to(out.resolve()):
         raise ValueError(f"unsafe dest {rel}")
     dest.parent.mkdir(parents=True, exist_ok=True)
+
+    if feed.get("skip_if_exists") and dest.exists():
+        return f"SKIP {name}: {rel} exists"
+
+    if feed.get("type") == "github-release-asset":
+        fetch_file({"url": url}, headers, dest)
+        return f"OK   {name}: {tag} -> {rel}"
 
     if feed.get("type") == "taxii":
         objects = fetch_taxii(feed, headers)
