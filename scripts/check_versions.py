@@ -28,6 +28,7 @@ SOURCES = {
     "KSM_VERSION": ("github", "kubernetes/kube-state-metrics"),
     "GITLAB_RUNNER_VERSION": ("gitlab", "gitlab-org/gitlab-runner"),
     "AUDITOR_VERSION": ("github", "chef/inspec"),  # cincproject/auditor tracks InSpec
+    "VENOM_VERSION": ("github", "ovh/venom"),
     "CADDY_VERSION": ("github", "caddyserver/caddy"),
     "DIAG_VERSION": ("github", "elastic/support-diagnostics"),
     "EPR_VERSION": ("github", "elastic/package-registry"),

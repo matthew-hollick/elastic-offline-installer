@@ -15,6 +15,7 @@ KSM_VERSION="${KSM_VERSION:-v2.20.0}"
 GITLAB_RUNNER_VERSION="${GITLAB_RUNNER_VERSION:-v19.6.0}"
 GITLAB_RUNNER_FLAVOR="${GITLAB_RUNNER_FLAVOR:-ubuntu}"   # ubuntu|alpine
 AUDITOR_VERSION="${AUDITOR_VERSION:-7.3.4}"
+VENOM_VERSION="${VENOM_VERSION:-v1.3.0}"
 CONTAINER_PLATFORM="${CONTAINER_PLATFORM:-linux/amd64}"
 OUT_DIR="$(realpath -m "${OUT_DIR:-dist/containers}")"
 SKOPEO_IMAGE="${SKOPEO_IMAGE:-quay.io/skopeo/stable:latest}"
@@ -34,6 +35,7 @@ images=(
   "registry.k8s.io/kube-state-metrics/kube-state-metrics:${KSM_VERSION}"
   "gitlab/gitlab-runner:${GITLAB_RUNNER_FLAVOR}-${GITLAB_RUNNER_VERSION}"
   "cincproject/auditor:${AUDITOR_VERSION}"
+  "ovhcom/venom:${VENOM_VERSION}"
   "$SKOPEO_IMAGE"
   "$BUILDAH_IMAGE"
 )

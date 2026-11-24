@@ -36,6 +36,7 @@ There are additional containers that we need to bring with us:
 - [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics) `registry.k8s.io/kube-state-metrics/kube-state-metrics` — exposes K8s object state as metrics for the agent's kubernetes integration
 - [GitLab Runner](https://docs.gitlab.com/runner/) `gitlab/gitlab-runner:ubuntu-*` — for executing CI pipelines on the disconnected side
 - [Cinc Auditor](https://cinc.sh/) `cincproject/auditor` — the open-source build of Chef InSpec, for compliance scanning on the disconnected side
+- [venom](https://github.com/ovh/venom) `ovhcom/venom` — OVH's integration-test runner (HTTP/exec/DB assertions from yaml testcases)
 - [skopeo](https://github.com/containers/skopeo) + [buildah](https://github.com/containers/buildah) tool images, so the toolchain works offline too
 
 Plus tools in `dist/tools/`:

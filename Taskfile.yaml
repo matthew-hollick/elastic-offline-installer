@@ -18,6 +18,7 @@ vars:
   GITLAB_RUNNER_VERSION: v19.6.0      # tag: gitlab/gitlab-runner:ubuntu-<ver>
   GITLAB_RUNNER_FLAVOR: ubuntu        # ubuntu|alpine
   AUDITOR_VERSION: 7.3.4              # cincproject/auditor (Chef InSpec, open)
+  VENOM_VERSION: v1.3.0               # ovhcom/venom integration-test runner
   CONTAINER_PLATFORM: linux/amd64
   CADDY_VERSION: latest             # static binary serving the EAR over HTTPS
   DIAG_VERSION: latest              # elastic/support-diagnostics release tag
@@ -84,6 +85,7 @@ tasks:
       GITLAB_RUNNER_VERSION: "{{.GITLAB_RUNNER_VERSION}}"
       GITLAB_RUNNER_FLAVOR: "{{.GITLAB_RUNNER_FLAVOR}}"
       AUDITOR_VERSION: "{{.AUDITOR_VERSION}}"
+      VENOM_VERSION: "{{.VENOM_VERSION}}"
       CONTAINER_PLATFORM: "{{.CONTAINER_PLATFORM}}"
       OUT_DIR: "{{.DIST_DIR}}/containers"
     cmds: [./scripts/save_containers.sh]
