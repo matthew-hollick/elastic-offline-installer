@@ -22,13 +22,18 @@ EPR_URL = "https://epr.elastic.co"
 
 
 def version_key(version: str) -> list:
-    """Sortable key for versions like '2.1.0' or '2.1.0-preview1'."""
+    """Sortable key for versions like '2.1.0' or '2.1.0-rc1'.
+
+    Numeric parts tag 2, non-numeric (pre-release) parts tag 0, and a
+    release gets a (1,) sentinel at the end — so a release outranks its
+    pre-releases ('2.1.0' > '2.1.0-rc1') while shorter releases still
+    rank below longer ones ('0' < '0.2.0').
+    """
     parts = [
-        (0, int(p)) if p.isdigit() else (1, p) for p in re.split(r"[.-]", version)
+        (2, int(p)) if p.isdigit() else (0, p) for p in re.split(r"[.-]", version)
     ]
-    # A release outranks any pre-release: '2.1.0' > '2.1.0-rc1'.
-    if not any(kind == 1 for kind, _ in parts):
-        parts.append((2, ""))
+    if not any(kind == 0 for kind, _ in parts):
+        parts.append((1,))
     return parts
 
 
