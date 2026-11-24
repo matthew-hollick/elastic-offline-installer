@@ -37,6 +37,7 @@ Plus tools in `dist/tools/`:
 - `diagnostics-<ver>-dist.zip` — Elastic's [support-diagnostics](https://github.com/elastic/support-diagnostics) tool, for capturing full platform state when Elastic Support asks
 - a [Temurin JRE](https://adoptium.net/) tarball — support-diagnostics is a Java tool; needed on hosts without a JDK (ES nodes have one bundled at `$ES_HOME/jdk`)
 - [`elastic-package`](https://github.com/elastic/elastic-package) (linux/amd64) — for building custom integrations on the offline side ([package-spec](https://github.com/elastic/package-spec))
+- `import_cvelist.py` — bulk-loads the mirrored cvelistV5 corpus into an ES index as ECS `vulnerability.*` docs (see [Feeds](#feeds); run with `--help` for options incl. the enrich-policy example)
 
 ## Building the bundle
 
@@ -77,8 +78,8 @@ The shipped config enables the CISA KEV file only; abuse.ch URLhaus + ThreatFox 
 
 **CVE List V5** (`cvelistv5`, ~700 MB): mirrors the nightly `*_all_CVEs_at_midnight.zip.zip` release asset into `feeds/cve/` — the dated filename is its own freshness key, so same-day re-runs skip (`skip_if_exists`). It unzips to a `cves.zip` of one CVE JSON 5.0 record per file. Ways to use it offline:
 
-- **Bulk-index into ES** — one doc per record keyed by `cveMetadata.cveId` (stream the nested zip through Logstash or an `esbulk`/`_bulk` script). Gives a searchable CVE corpus: descriptions, references, CVSS/CWE, and CISA ADP containers which carry KEV status + SSVC scores (partially redundant with the KEV feed).
-- **`enrich` processor** — a `match` enrich policy on a source index keyed by `cveMetadata.cveId` decorates vulnerability findings from scanner integrations (Tenable/Qualys/Wazuh emit `vulnerability.id`) with full CVE metadata at ingest time.
+- **Bulk-index into ES** — `dist/tools/import_cvelist.py` streams the nested zip and bulk-indexes one flattened doc per record (`_id` = CVE id, ECS `vulnerability.*` fields + `cve.*` extras; REJECTED records skipped) into a dated index, then flips an alias. Gives a searchable CVE corpus: descriptions, references, CVSS/CWE, and CISA ADP containers which carry KEV status + SSVC scores (partially redundant with the KEV feed). Example: `python3 import_cvelist.py --es https://es:9200 --index cvelist-2026.11.24 --alias cvelist --ca-cert ca.crt /opt/ear/feeds/cve/2026-11-24_all_CVEs_at_midnight.zip.zip`
+- **`enrich` processor** — a `match` enrich policy on the `cvelist` alias keyed by `vulnerability.id` decorates vulnerability findings from scanner integrations (Tenable/Qualys/Wazuh emit `vulnerability.id`) with full CVE metadata at ingest time — the policy example is in `import_cvelist.py --help`.
 - **Local tooling** — serve the zip as-is for hosts that consume a CVE JSON5 mirror directly.
 
 `ti_custom` isn't a fit here: CVE records aren't STIX indicator objects, and indicator-match rules don't consume `vulnerability` docs.

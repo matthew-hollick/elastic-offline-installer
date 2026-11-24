@@ -77,3 +77,9 @@ esac
 (cd "$tmp" && echo "$line" | $sum -c -)
 tar -xzf "$tmp/$eptar" -C "$OUT_DIR" elastic-package
 chmod +x "$OUT_DIR/elastic-package"
+
+# --- deploy-side helper scripts --------------------------------------------
+# import_cvelist.py bulk-loads the mirrored cvelistV5 corpus (feeds/cve/) into
+# an ES index for offline CVE lookup and enrich.
+install -m 0755 files/tools/import_cvelist.py "$OUT_DIR/import_cvelist.py"
+echo "== copied import_cvelist.py"
