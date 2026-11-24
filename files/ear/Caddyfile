@@ -1,0 +1,37 @@
+# Elastic Artifact Repository (EAR) — static file server.
+#
+# Served over BOTH http:// and https:// on the same hostname:
+#   - HTTPS for browsers, curl and Kibana/Fleet once the CA is trusted.
+#   - HTTP for Elastic Agents — they cannot be configured to trust a
+#     custom CA for artifact downloads, so agent fetch/upgrade traffic
+#     needs the plain endpoint (per Elastic's air-gapped guidance).
+#
+# Replace `ear.internal` with this machine's FQDN (or IP) as clients
+# will address it — it must match the certificate's SAN.
+#
+# TLS: Caddy serves the full chain found in cert.pem, so concatenate
+# the leaf certificate and the CA chain into one file:
+#     cat server.crt ca-chain.pem > tls/cert.pem
+# Place key.pem alongside it in tls/ (0600, owned by the caddy user).
+#
+# If you ever need a self-contained CA instead (no enterprise certs),
+# swap the tls line for:  tls internal
+# — Caddy then issues its own certs; clients must trust the CA root at
+# /var/lib/caddy/caddy/pki/authorities/local/root.crt on the server.
+#
+# No ACME/Let's Encrypt — there is no outbound internet on the target.
+
+(ear-site) {
+	root * /opt/ear
+	file_server browse
+	encode zstd gzip
+}
+
+https://ear.internal {
+	tls /opt/ear-web/tls/cert.pem /opt/ear-web/tls/key.pem
+	import ear-site
+}
+
+http://ear.internal {
+	import ear-site
+}

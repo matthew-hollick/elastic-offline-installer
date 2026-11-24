@@ -1,0 +1,27 @@
+[Unit]
+Description=Caddy — Elastic Artifact Repository
+Documentation=https://caddyserver.com/docs/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+# Setup: useradd --system --home-dir /var/lib/caddy --shell /usr/sbin/nologin caddy
+#        mkdir -p /opt/ear-web/tls /opt/ear /var/lib/caddy && chown caddy:caddy /var/lib/caddy
+#        install -m 0600 -o caddy -g caddy cert.pem key.pem /opt/ear-web/tls/
+User=caddy
+Group=caddy
+# Caddy stores its internal CA under XDG_DATA_HOME — must be writable.
+Environment=XDG_DATA_HOME=/var/lib/caddy
+ExecStart=/opt/ear-web/caddy run --environ --config /opt/ear-web/Caddyfile
+ExecReload=/opt/ear-web/caddy reload --config /opt/ear-web/Caddyfile --force
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/caddy
+
+[Install]
+WantedBy=multi-user.target

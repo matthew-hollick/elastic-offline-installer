@@ -1,0 +1,89 @@
+version: '3'
+
+# Offline Elastic installer pipeline.
+#   task download    # fetch everything for the EAR/EPR/containers
+#   task build       # build the package-registry binary
+#   task package     # verify + tar up dist/ for transfer
+#
+# Override vars on the CLI, e.g.:  task download:ear TARGET_ARCH=arm64
+
+vars:
+  STACK_VERSION: "9.5.7"          # keep in sync with README
+  TARGET_ARCH: amd64              # target servers (amd64|arm64); dev laptop is arm
+  EPR_VERSION: latest             # package-registry git tag
+  SNMP_EXPORTER_VERSION: v0.31.0
+  CONTAINER_PLATFORM: linux/amd64
+  CADDY_VERSION: latest             # static binary serving the EAR over HTTPS
+  DIST_DIR: dist
+
+tasks:
+  default:
+    cmds: [task --list]
+    silent: true
+
+  download:
+    desc: Download everything (EAR artifacts, integrations, containers)
+    deps: [download:ear, download:integrations, download:containers, download:webserver]
+
+  download:ear:
+    desc: Debs (elasticsearch, kibana) + tar.gz/zip (agent, heartbeat) + sha512
+    env:
+      STACK_VERSION: "{{.STACK_VERSION}}"
+      TARGET_ARCH: "{{.TARGET_ARCH}}"
+      OUT_DIR: "{{.DIST_DIR}}/ear"
+    cmds: [./scripts/download_ear.sh]
+
+  download:integrations:
+    desc: Integration zips + signatures from epr.elastic.co into dist/epr/packages
+    cmds:
+      - python3 scripts/download_integrations.py --out {{.DIST_DIR}}/epr/packages {{.CLI_ARGS}}
+
+  download:webserver:
+    desc: Caddy binary + Caddyfile + systemd unit into dist/web
+    env:
+      CADDY_VERSION: "{{.CADDY_VERSION}}"
+      TARGET_ARCH: "{{.TARGET_ARCH}}"
+      OUT_DIR: "{{.DIST_DIR}}/web"
+    cmds: [./scripts/download_webserver.sh]
+
+  download:containers:
+    desc: Export image tars via skopeo container ({{.CONTAINER_PLATFORM}})
+    env:
+      STACK_VERSION: "{{.STACK_VERSION}}"
+      SNMP_EXPORTER_VERSION: "{{.SNMP_EXPORTER_VERSION}}"
+      CONTAINER_PLATFORM: "{{.CONTAINER_PLATFORM}}"
+      OUT_DIR: "{{.DIST_DIR}}/containers"
+    cmds: [./scripts/save_containers.sh]
+
+  build:
+    desc: Build all components
+    deps: [build:epr]
+
+  build:integration:
+    desc: "Build a custom integration zip. Usage: task build:integration -- <git-url> [subdir] [ref]"
+    cmds:
+      - ./scripts/build_integration.sh {{.CLI_ARGS}}
+
+  build:epr:
+    desc: Compile package-registry and assemble dist/epr (binary, config, unit)
+    env:
+      EPR_VERSION: "{{.EPR_VERSION}}"
+      OUT_DIR: "{{.DIST_DIR}}/epr"
+    cmds: [./scripts/build_epr.sh]
+
+  verify:
+    desc: Verify sha512 checksums of everything in dist/ear
+    cmds:
+      - cd {{.DIST_DIR}}/ear && find . -name '*.sha512' -execdir sha512sum -c {} +
+
+  package:
+    desc: Verify, then tar dist/ into a transferable bundle
+    deps: [verify]
+    cmds:
+      - tar -czf elastic-offline-bundle-{{.STACK_VERSION}}.tar.gz -C {{.DIST_DIR}} .
+      - echo "wrote elastic-offline-bundle-{{.STACK_VERSION}}.tar.gz"
+
+  clean:
+    desc: Remove dist/ and any bundle tarballs
+    cmds:
+      - rm -rf {{.DIST_DIR}} elastic-offline-bundle-*.tar.gz

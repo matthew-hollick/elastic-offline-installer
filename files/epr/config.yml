@@ -1,0 +1,9 @@
+# Elastic Package Registry configuration.
+# package_paths is relative to WorkingDirectory (/opt/epr in epr.service).
+package_paths:
+  - ./packages
+
+cache_time.index: 10s
+cache_time.search: 10m
+cache_time.categories: 10m
+cache_time.catch_all: 10m

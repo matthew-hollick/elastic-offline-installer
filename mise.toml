@@ -1,0 +1,9 @@
+[tools]
+python = "3.14"
+uv = "latest"
+ruff = "latest"
+task = "latest"
+go = "latest"
+
+[env]
+_.python.venv = { path = ".venv", create = true }

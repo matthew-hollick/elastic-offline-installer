@@ -1,0 +1,26 @@
+[Unit]
+Description=Elastic Package Registry
+Documentation=https://github.com/elastic/package-registry
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Create this user and the /opt/epr layout when deploying.
+User=epr
+Group=epr
+WorkingDirectory=/opt/epr
+ExecStart=/opt/epr/bin/package-registry -address=0.0.0.0:8080 -config=/opt/epr/config.yml
+# Elastic's own packages carry <zip>.sig files and are still served, but
+# custom-built integrations (build:integration) are unsigned, so the
+# signature requirement must be off:
+Environment=EPR_REQUIRE_PACKAGE_SIGNATURES=false
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/epr
+
+[Install]
+WantedBy=multi-user.target
