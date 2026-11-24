@@ -22,3 +22,31 @@ We need to build an EPR (Elastic Package Registory)
 There are additional containers that we need to bring with us:
 - Elastic Agent
 - Prometheus exporter for SNMP
+
+## Building the bundle
+
+From a clean checkout:
+
+```bash
+mise install                          # one-time: go, task, python
+
+# optional but needed for HTTPS on the EAR — must precede `task download`
+cp server.crt ca-chain.pem > files/ear/tls/cert.pem   # leaf + chain, one file
+cp server.key files/ear/tls/key.pem                   # never committed (gitignored)
+
+task download                         # EAR artifacts + integrations + containers + webserver
+task build                            # compiles package-registry (EPR)
+task build:integration -- https://github.com/FortytwoM/elastic-nessus-integration nessus
+task package                          # verify checksums + tar dist/ -> elastic-offline-bundle-<version>.tar.gz
+```
+
+`KIBANA_CONSTRAINT='^8.13.0 || ^9.0.0'` can be set before `build:integration` to relax a package's declared `conditions.kibana.version`.
+
+## Deploying (offline side)
+
+- `dist/ear/` -> `/opt/ear` — webroot of the Elastic Artifact Registry
+- `dist/web/` -> `/opt/ear-web` — Caddy binary + `Caddyfile` + `ear.service` (create the `caddy` user per the unit comments; edit the hostname in `Caddyfile` to match the cert SAN)
+- `dist/epr/` -> `/opt/epr` — package-registry binary + `config.yml` + `epr.service` + `packages/` (create the `epr` user)
+- `dist/containers/` -> `gunzip -c <file>.tar.gz | docker load`
+
+Note on TLS and agents: Elastic Agent cannot pin trust for artifact downloads — either install the CA into each host's system trust store and use `https://`, or point agent binary sources at the `http://` endpoint (both are served).
