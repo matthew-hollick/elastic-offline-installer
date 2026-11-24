@@ -53,7 +53,12 @@ Requires [mise](https://mise.jdx.dev) and [Task](https://taskfile.dev). From a c
 
 ```bash
 mise install                          # one-time: go, task, python
+task all                              # download + build + package -> elastic-offline-bundle-<version>.tar.gz
+```
 
+Or run the stages individually:
+
+```bash
 task download                         # EAR artifacts + integrations + containers + webserver + tools + feeds
 task build                            # compiles package-registry (EPR)
 task build:integration -- https://github.com/FortytwoM/elastic-nessus-integration nessus

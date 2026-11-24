@@ -30,6 +30,13 @@ tasks:
     cmds: [task --list]
     silent: true
 
+  all:
+    desc: "Full pipeline: download everything, build components, verify + package bundle"
+    cmds:
+      - task: download
+      - task: build
+      - task: package
+
   download:
     desc: Download everything (EAR artifacts, integrations, containers, webserver, tools, feeds)
     deps: [download:ear, download:integrations, download:containers, download:webserver, download:tools, download:feeds]
