@@ -1,15 +1,24 @@
 #!/usr/bin/env bash
-# Download Elastic stack artifacts into the canonical
-# artifacts.elastic.co/downloads/ layout so the output directory can be
-# served directly as the Elastic Artifact Registry (the Fleet "agent
-# binary download source" and endpoint artifact repository).
+# Download Elastic stack artifacts into a canonical mirror of the two
+# Elastic artifact services, so the output directory can be served
+# directly as the Elastic Artifact Registry (the Fleet "agent binary
+# download source") and the Endpoint Artifact Repository (Elastic Defend
+# client-side detection artifacts).
 #
-# Layout produced:
-#   <OUT_DIR>/elasticsearch/elasticsearch-<v>-<arch>.deb
-#   <OUT_DIR>/kibana/kibana-<v>-<arch>.deb
-#   <OUT_DIR>/beats/elastic-agent/elastic-agent-<v>-linux-x86_64.tar.gz
-#   <OUT_DIR>/fleet-server/fleet-server-<v>-windows-x86_64.zip
+# Layout produced — URI paths preserved 1:1 from upstream:
+#   <OUT_DIR>/downloads/elasticsearch/elasticsearch-<v>-<arch>.deb
+#   <OUT_DIR>/downloads/beats/elastic-agent/elastic-agent-<v>-linux-x86_64.tar.gz
+#   <OUT_DIR>/downloads/fleet-server/fleet-server-<v>-windows-x86_64.zip
 #   ... every file accompanied by .sha512 and .asc
+#   <OUT_DIR>/downloads/endpoint/...  Elastic Defend artifacts (see below)
+#   <OUT_DIR>/GPG-KEY-elasticsearch   (mirrors artifacts.elastic.co/GPG-KEY-elasticsearch)
+#   <OUT_DIR>/geoip/, <OUT_DIR>/models/   custom mirrors, see sections below
+#
+# Fleet's agent-binary download source then points at
+#   <scheme>://<ear-host>/downloads/
+# and the Elastic Defend advanced setting
+#   advanced.artifacts.global.base_url (per-OS variants)
+# points at <scheme>://<ear-host>.
 #
 # The prefix list follows Elastic's own air-gapped reference script:
 # https://www.elastic.co/docs/deploy-manage/deploy/self-managed/air-gapped-install
@@ -80,9 +89,9 @@ fetch() {
 
 download() {
   local path="$1"
-  fetch "$BASE/$path"        "$OUT_DIR/$path"
-  fetch "$BASE/$path.sha512" "$OUT_DIR/$path.sha512"
-  fetch "$BASE/$path.asc"    "$OUT_DIR/$path.asc"
+  fetch "$BASE/$path"        "$OUT_DIR/downloads/$path"
+  fetch "$BASE/$path.sha512" "$OUT_DIR/downloads/$path.sha512"
+  fetch "$BASE/$path.asc"    "$OUT_DIR/downloads/$path.asc"
 }
 
 echo "== stack $STACK_VERSION, target arch $TARGET_ARCH -> $OUT_DIR"
@@ -94,6 +103,29 @@ for p in "${DEB_PREFIXES[@]}";     do download "$p-${STACK_VERSION}-${TARGET_ARC
 # Elastic's release signing key — lets the offline side verify the .asc
 # signatures carried alongside every artifact.
 fetch "https://artifacts.elastic.co/GPG-KEY-elasticsearch" "$OUT_DIR/GPG-KEY-elasticsearch"
+
+# Elastic Defend client-side artifacts — detection signatures, behavioral
+# models, blocklists/exception lists etc. ("fingerprints" the endpoint
+# agent updates continuously). These live on a separate service
+# (artifacts.security.elastic.co), discovered through a versioned manifest
+# zip: downloads/endpoint/manifest/artifacts-<stack-version>.zip lists
+# content-addressed encrypted blobs whose filename is the sha256 of the
+# stored content — the filename is the checksum.
+echo "== endpoint artifacts (artifacts.security.elastic.co)"
+command -v unzip >/dev/null || { echo "error: 'unzip' not found" >&2; exit 1; }
+ep_base="https://artifacts.security.elastic.co"
+mzip="$OUT_DIR/downloads/endpoint/manifest/artifacts-${STACK_VERSION}.zip"
+fetch "$ep_base/downloads/endpoint/manifest/artifacts-${STACK_VERSION}.zip" "$mzip"
+while read -r rel; do
+  dest="$OUT_DIR$rel"
+  fetch "$ep_base$rel" "$dest"
+  echo "$(basename "$dest")  $dest" | sha256sum -c - >/dev/null \
+    || { echo "error: sha256 mismatch on $rel" >&2; rm -f "$dest"; exit 1; }
+done < <(unzip -p "$mzip" manifest.json | python3 -c '
+import json, sys
+for a in json.load(sys.stdin)["artifacts"].values():
+    print(a["relative_url"])
+')
 
 # GeoIP databases. Elasticsearch's geoip downloader polls a JSON manifest
 # (ingest.geoip.downloader.endpoint); air-gapped clusters need a mirror.
