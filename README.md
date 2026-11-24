@@ -30,10 +30,6 @@ From a clean checkout:
 ```bash
 mise install                          # one-time: go, task, python
 
-# optional but needed for HTTPS on the EAR — must precede `task download`
-cp server.crt ca-chain.pem > files/ear/tls/cert.pem   # leaf + chain, one file
-cp server.key files/ear/tls/key.pem                   # never committed (gitignored)
-
 task download                         # EAR artifacts + integrations + containers + webserver
 task build                            # compiles package-registry (EPR)
 task build:integration -- https://github.com/FortytwoM/elastic-nessus-integration nessus
@@ -46,6 +42,7 @@ task package                          # verify checksums + tar dist/ -> elastic-
 
 - `dist/ear/` -> `/opt/ear` — webroot of the Elastic Artifact Registry
 - `dist/web/` -> `/opt/ear-web` — Caddy binary + `Caddyfile` + `ear.service` (create the `caddy` user per the unit comments; edit the hostname in `Caddyfile` to match the cert SAN)
+- TLS certificates are issued inside the offline environment — install them at deploy time: `cat server.crt ca-chain.pem > /opt/ear-web/tls/cert.pem` and `key.pem` alongside (0600, owned by `caddy`)
 - `dist/epr/` -> `/opt/epr` — package-registry binary + `config.yml` + `epr.service` + `packages/` (create the `epr` user)
 - `dist/containers/` -> `gunzip -c <file>.tar.gz | docker load`
 

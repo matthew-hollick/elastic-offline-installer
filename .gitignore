@@ -1,6 +1,5 @@
 dist/
 .build/
-files/ear/tls/
 elastic-offline-bundle-*.tar.gz
 .venv/
 __pycache__/

@@ -35,15 +35,9 @@ tar -xzf "$tmp/$tarball" -C "$OUT_DIR/bin" caddy
 chmod +x "$OUT_DIR/bin/caddy"
 cp files/ear/Caddyfile files/ear/ear.service "$OUT_DIR/"
 
-# Stage TLS material if provided (files/ear/tls/ is gitignored — never
-# commit private keys). Expects cert.pem (leaf + CA chain) and key.pem.
-if [[ -d files/ear/tls ]] && compgen -G "files/ear/tls/*" >/dev/null; then
-  mkdir -p "$OUT_DIR/tls"
-  cp files/ear/tls/* "$OUT_DIR/tls/"
-  echo "== staged TLS files from files/ear/tls/"
-else
-  echo "== NOTE: no TLS files in files/ear/tls/ — add cert.pem/key.pem before deploy"
-fi
+# TLS material is NOT staged here — certificates are issued inside the
+# offline environment and installed on the target at deploy time into
+# /opt/ear-web/tls/ (see ear.service setup comments).
 
 echo "== wrote $OUT_DIR:"
 echo "   bin/caddy ($CADDY_VERSION), Caddyfile, ear.service"
