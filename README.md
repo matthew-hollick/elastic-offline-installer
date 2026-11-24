@@ -141,9 +141,10 @@ Remember to grant the `vulns-*` pattern in your ES roles — analysts' `logs-*` 
 
 ```bash
 cp dist/audit/inputs.example.yml dist/audit/inputs.yml   # fill in your hostnames + creds
-docker run --rm --network host -v "$PWD/dist/audit:/profile" cincproject/auditor:7.3.4 \
-  exec /profile --input-file /profile/inputs.yml
+dist/audit/run.sh                                        # auto-loads the image from dist/containers
 ```
+
+`run.sh` takes an alternate inputs file as its first arg, honors `AUDITOR_IMAGE` for a different tag, and passes extra args through to `cinc-auditor exec` (e.g. `./run.sh --reporter cli junit:report.xml`).
 
 Creds/URLs go in the inputs file (`--input-file`), or override individually with `--input name=value`. `insecure: true` skips TLS verification for self-signed certs inside the air-gap; set `false` once the hosts trust your CA. Demonstration-grade — extend `controls/*.rb` as the deployment grows.
 
