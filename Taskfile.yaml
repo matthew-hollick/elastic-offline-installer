@@ -14,6 +14,7 @@ vars:
   SNMP_EXPORTER_VERSION: v0.31.0
   CONTAINER_PLATFORM: linux/amd64
   CADDY_VERSION: latest             # static binary serving the EAR over HTTPS
+  DIAG_VERSION: latest              # elastic/support-diagnostics release tag
   DIST_DIR: dist
 
 tasks:
@@ -23,7 +24,7 @@ tasks:
 
   download:
     desc: Download everything (EAR artifacts, integrations, containers)
-    deps: [download:ear, download:integrations, download:containers, download:webserver]
+    deps: [download:ear, download:integrations, download:containers, download:webserver, download:tools]
 
   download:ear:
     desc: Debs (elasticsearch, kibana) + tar.gz/zip (agent, heartbeat) + sha512
@@ -45,6 +46,13 @@ tasks:
       TARGET_ARCH: "{{.TARGET_ARCH}}"
       OUT_DIR: "{{.DIST_DIR}}/web"
     cmds: [./scripts/download_webserver.sh]
+
+  download:tools:
+    desc: Elastic support-diagnostics dist zip into dist/tools
+    env:
+      DIAG_VERSION: "{{.DIAG_VERSION}}"
+      OUT_DIR: "{{.DIST_DIR}}/tools"
+    cmds: [./scripts/download_tools.sh]
 
   download:containers:
     desc: Export image tars via skopeo container ({{.CONTAINER_PLATFORM}})

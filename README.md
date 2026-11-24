@@ -23,6 +23,8 @@ There are additional containers that we need to bring with us:
 - Elastic Agent
 - Prometheus exporter for SNMP
 
+Plus Elastic's support-diagnostics tool (`dist/tools/diagnostics-<ver>-dist.zip`) for capturing full platform state when Elastic Support asks — unzip on a node with a JRE and run `support-diagnostics.sh`.
+
 ## Building the bundle
 
 From a clean checkout:
