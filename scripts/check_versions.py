@@ -89,7 +89,7 @@ def main() -> int:
             continue
         try:
             new = latest(kind, loc)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - report the failure, keep checking
             rows.append((name, cur, f"check failed: {e}", "?"))
             continue
         state = "ok"

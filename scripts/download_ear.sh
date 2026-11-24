@@ -79,7 +79,7 @@ fetch() {
   local url="$1" dest="$2" attempt
   mkdir -p "$(dirname "$dest")"
   if [[ -f "$dest" ]]; then
-    echo "  exists: ${dest#$OUT_DIR/}"
+    echo "  exists: ${dest#"$OUT_DIR"/}"
     return
   fi
   echo "  downloading: $(basename "$dest")"

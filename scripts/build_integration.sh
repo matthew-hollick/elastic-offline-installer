@@ -116,7 +116,7 @@ PY
 fi
 
 # --- 3. build the package zip ---------------------------------------------
-echo "== building package in ${pkgdir#$src/}"
+echo "== building package in ${pkgdir#"$src"/}"
 if ! (cd "$pkgdir" && "$ep" build); then
   echo "== strict build failed — retrying with --skip-validation"
   echo "   (community packages often fail package-spec validation;"

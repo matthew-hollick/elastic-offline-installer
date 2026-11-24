@@ -112,7 +112,7 @@ def main() -> int:
             dest = out / Path(path).name
             try:
                 print(f"{fetch(EPR_URL + path, dest)}: {dest.name}", flush=True)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - keep going, tally failures
                 print(f"FAIL: {dest.name}: {exc}", file=sys.stderr, flush=True)
                 failures += 1
 

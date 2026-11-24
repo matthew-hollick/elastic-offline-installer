@@ -276,7 +276,7 @@ def main() -> int:
             continue
         try:
             print(run_feed(feed, out), flush=True)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - one bad feed must not kill the rest
             print(f"FAIL {feed.get('name', '?')}: {exc}", file=sys.stderr, flush=True)
             failures += 1
 

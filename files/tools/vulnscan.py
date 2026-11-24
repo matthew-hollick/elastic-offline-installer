@@ -37,7 +37,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 FINDINGS_INDEX = "vulns-default"
@@ -72,7 +72,7 @@ FINDINGS_MAPPING = {
     }
 }
 
-NOW = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+NOW = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def distro_qual(platform: str, version: str) -> str | None:
@@ -234,7 +234,7 @@ def scan_host(args, key: str, host: dict, workdir: Path) -> list:
         "sbom", "--format", "json", "--scanners", "vuln", "--quiet",
         f"/work/{sbom.name}",
     ]
-    out = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+    out = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=1800)
     if out.returncode != 0:
         print(f"  FAIL trivy {key}: {out.stderr.strip()[:300]}", file=sys.stderr)
         return []
