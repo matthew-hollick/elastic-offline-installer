@@ -155,6 +155,15 @@ print(json.dumps(es, indent=1))
 ' > "$geo_dir/database.json"
 echo "  wrote geoip/database.json (rewrite __EAR_BASE_URL__ at deploy)"
 
+# Third-party runtime feeds consumed by mirrored integrations. The
+# cisa_kevs integration's `url` var defaults to www.cisa.gov — unreachable
+# air-gapped — so mirror the feed into the EAR and repoint the var at
+# deploy. The feed is a dated snapshot (catalogVersion is a date); it only
+# refreshes when this task is re-run and the bundle redeployed.
+echo "== third-party feeds"
+fetch "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json" \
+  "$OUT_DIR/feeds/cisa/known_exploited_vulnerabilities.json"
+
 echo "== verifying sha512 checksums"
 cd "$OUT_DIR"
 find . -name '*.sha512' -execdir sha512sum -c {} +
