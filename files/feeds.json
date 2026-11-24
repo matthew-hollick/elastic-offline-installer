@@ -36,6 +36,15 @@
       "collection": "Enterprise ATT&CK"
     },
     {
+      "name": "opencti",
+      "enabled": false,
+      "type": "taxii",
+      "description": "OpenCTI TAXII 2.1 collection — url is the '/taxii2/root' API root of your instance; collection is its title or UUID (Data > Data sharing > TAXII Collections). OPENCTI_TOKEN is a profile API key. Skipped while the env var is unset.",
+      "url": "https://opencti.example.com/taxii2/root/",
+      "collection": "my-collection-name-or-uuid",
+      "auth": { "type": "header", "env": "OPENCTI_TOKEN", "header": "Authorization", "prefix": "Bearer " }
+    },
+    {
       "name": "example-keyed-feed",
       "enabled": false,
       "type": "taxii",

@@ -68,7 +68,9 @@ Auth is per-feed and env-gated — **a feed whose referenced env var is unset is
 "auth": { "type": "basic", "username_env": "FEED_USER", "password_env": "FEED_PASS" }
 ```
 
-The shipped config enables the CISA KEV file only; abuse.ch URLhaus + ThreatFox via [Anomali Limo](https://limo.anomali.com/) (free TAXII 2.x, guest/guest, no registration), MITRE ATT&CK, and a key-gated template ship `enabled: false` — flip to `true` for servers your network can reach.
+The shipped config enables the CISA KEV file only; abuse.ch URLhaus + ThreatFox via [Anomali Limo](https://limo.anomali.com/) (free TAXII 2.x, guest/guest, no registration), MITRE ATT&CK, an OpenCTI collection, and a keyed template ship `enabled: false` — flip to `true` for servers your network can reach.
+
+**OpenCTI**: point `url` at your instance's `/taxii2/root` API root and `collection` at the collection's name or UUID (create one under *Data → Data sharing → TAXII Collections*, filtered however you like — e.g. indicators with score ≥ n). Export `OPENCTI_TOKEN` (a profile API key, sent as `Authorization: Bearer`). This is the recommended aggregation pattern: OpenCTI ingests whatever upstream feeds you subscribe to on the connected side, you curate one collection, and this task mirrors it. Note the `ti_opencti` integration itself is **not** mirrorable — it polls OpenCTI's GraphQL API with cursor-paginated queries and needs a live instance.
 
 ### Serving to ti_custom
 
