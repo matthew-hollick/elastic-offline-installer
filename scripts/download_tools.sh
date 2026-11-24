@@ -80,6 +80,9 @@ chmod +x "$OUT_DIR/elastic-package"
 
 # --- deploy-side helper scripts --------------------------------------------
 # import_cvelist.py bulk-loads the mirrored cvelistV5 corpus (feeds/cve/) into
-# an ES index for offline CVE lookup and enrich.
+# an ES index for offline CVE lookup and enrich. vulnscan.py + units scan
+# osquery package inventory with the trivy container and index findings.
 install -m 0755 files/tools/import_cvelist.py "$OUT_DIR/import_cvelist.py"
-echo "== copied import_cvelist.py"
+install -m 0755 files/tools/vulnscan.py "$OUT_DIR/vulnscan.py"
+install -m 0644 files/tools/vulnscan.service files/tools/vulnscan.timer "$OUT_DIR/"
+echo "== copied import_cvelist.py, vulnscan.{py,service,timer}"

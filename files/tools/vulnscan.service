@@ -1,0 +1,19 @@
+[Unit]
+Description=Scan osquery package inventory with trivy and index findings
+Documentation=file:/opt/tools/vulnscan.py
+After=docker.service network-online.target
+Wants=network-online.target
+
+# /etc/default/vulnscan (EnvironmentFile):
+#   ES_URL=https://es:9200            ES_API_KEY=...     (or ES_USER/ES_PASSWORD)
+#   EAR_URL=https://ear:443           EAR_CURL_FLAGS=-fsS   (add k for self-signed)
+#   CVELIST_INDEX=cvelist             EXTRA_ARGS="--parallel 8 --insecure"
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/default/vulnscan
+ExecStartPre=/bin/sh -c 'mkdir -p /var/lib/vulnscan/trivy-cache/db /var/lib/vulnscan/trivy-cache/java-db'
+ExecStartPre=/bin/sh -c 'curl $EAR_CURL_FLAGS "$EAR_URL/feeds/trivy/db.tar.gz"      | tar -xz -C /var/lib/vulnscan/trivy-cache/db'
+ExecStartPre=/bin/sh -c 'curl $EAR_CURL_FLAGS "$EAR_URL/feeds/trivy/java-db.tar.gz" | tar -xz -C /var/lib/vulnscan/trivy-cache/java-db'
+ExecStart=/usr/bin/python3 /opt/tools/vulnscan.py --es "$ES_URL" \
+  --enrich-index "$CVELIST_INDEX" --prune-days 30 \
+  --cache-dir /var/lib/vulnscan/trivy-cache $EXTRA_ARGS

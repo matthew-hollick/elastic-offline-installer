@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily vulnerability scan of osquery package inventory
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

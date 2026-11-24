@@ -40,6 +40,7 @@ Plus tools in `dist/tools/`:
 - a [Temurin JRE](https://adoptium.net/) tarball — support-diagnostics is a Java tool; needed on hosts without a JDK (ES nodes have one bundled at `$ES_HOME/jdk`)
 - [`elastic-package`](https://github.com/elastic/elastic-package) (linux/amd64) — for building custom integrations on the offline side ([package-spec](https://github.com/elastic/package-spec))
 - `import_cvelist.py` — bulk-loads the mirrored cvelistV5 corpus into an ES index as ECS `vulnerability.*` docs (see [Feeds](#feeds); run with `--help` for options incl. the enrich-policy example)
+- `vulnscan.py` + `vulnscan.service`/`.timer` — centrally scans osquery package inventory with the trivy container and writes findings to `vulns-default` (see [Vulnerability scanning](#vulnerability-scanning))
 
 ## Building the bundle
 
@@ -97,6 +98,29 @@ TRIVY_SKIP_DB_UPDATE=true TRIVY_SKIP_JAVA_DB_UPDATE=true trivy fs /path/to/targe
 ```
 
 trivy then runs fully offline. The DBs refresh on every `task download:feeds` (content varies daily; the fixed names mean they always overwrite).
+
+### Vulnerability scanning
+
+`vulnscan.py` turns osquery package inventory into CVE findings **centrally** — no per-host scanner needed:
+
+1. pulls the latest package rows per host from `logs-osquery_manager.result-*` (works best when pack queries run `"snapshot": true`; `--lookback` should exceed your pack interval, default 36h)
+2. emits a CycloneDX SBOM per host — purls carry `distro`/`arch` qualifiers (`pkg:deb/ubuntu/libssl3@…?arch=amd64&distro=ubuntu-22.04`) so trivy matches OS packages correctly
+3. runs `trivy sbom` per host in the trivy container (`--parallel`), DB from the seeded cache — never updates inside the air-gap
+4. writes findings to **`vulns-default`** (plain index, not a data stream — docs update in place): `_id = sha1(host+purl+cve)` makes re-scans idempotent; `vulnerability.first_seen`/`last_seen` track lifecycle; `--prune-days` drops resolved findings
+5. `--enrich-index cvelist` decorates findings in bulk via mget — description, CVSS, KEV status baked into each doc
+
+Covered tables: `deb_packages`, `rpm_packages`, `python_packages`, `npm_packages` (full distro/lang matching); `chocolatey_packages`, `homebrew_packages`, `flatpak_packages`, `programs` map to generic purls with sparse trivy coverage. Windows KB patching isn't covered.
+
+Deploy on any docker host (not a data node):
+
+```bash
+install -m 0755 dist/tools/vulnscan.py /opt/tools/
+install -m 0644 dist/tools/vulnscan.{service,timer} /etc/systemd/system/
+# /etc/default/vulnscan — see the unit file comments
+systemctl enable --now vulnscan.timer
+```
+
+Remember to grant the `vulns-*` pattern in your ES roles — analysts' `logs-*` grants won't cover it.
 
 ### Serving to ti_custom
 
