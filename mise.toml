@@ -4,6 +4,7 @@ uv = "latest"
 ruff = "latest"
 task = "latest"
 go = "latest"
+trivy = "latest"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
