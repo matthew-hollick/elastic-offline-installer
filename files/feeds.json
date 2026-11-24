@@ -45,6 +45,22 @@
       "skip_if_exists": true
     },
     {
+      "name": "trivy-db",
+      "type": "oci-artifact",
+      "description": "trivy vulnerability DB — the single tar+gzip layer of ghcr.io/aquasecurity/trivy-db:2 (~250 MB); extract into trivy's cache dir on each scanner host",
+      "repo": "aquasecurity/trivy-db",
+      "tag": "2",
+      "dest": "trivy/db.tar.gz"
+    },
+    {
+      "name": "trivy-java-db",
+      "type": "oci-artifact",
+      "description": "trivy Java dependency index (GAV→vulnerability) — layer of ghcr.io/aquasecurity/trivy-java-db:1; needed for jar/pom/war scans",
+      "repo": "aquasecurity/trivy-java-db",
+      "tag": "1",
+      "dest": "trivy/java-db.tar.gz"
+    },
+    {
       "name": "opencti",
       "enabled": false,
       "type": "taxii",

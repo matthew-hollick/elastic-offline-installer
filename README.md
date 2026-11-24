@@ -31,6 +31,8 @@ There are additional containers that we need to bring with us:
 - [Logstash](https://www.elastic.co/docs/reference/logstash)
 - Elastic Maps Server (`elastic-maps-server-ubi`, for [offline Kibana maps](https://www.elastic.co/guide/en/kibana/current/maps-connect-to-ems.html))
 - Prometheus exporter for SNMP
+- [trivy](https://github.com/aquasecurity/trivy) `aquasec/trivy` — offline vulnerability/misconfig scanner; pair with the mirrored DBs under `feeds/trivy/`
+- [checkov](https://github.com/bridgecrewio/checkov) `bridgecrew/checkov` — IaC/policy scanner; **self-contained** — checks ship inside the image, there is no runtime "DB" to mirror (custom policies travel as your own repo; aux binaries like kustomize/helm/kubectl are only needed if you scan those framework types)
 - [skopeo](https://github.com/containers/skopeo) + [buildah](https://github.com/containers/buildah) tool images, so the toolchain works offline too
 
 Plus tools in `dist/tools/`:
@@ -61,6 +63,7 @@ task package                          # verify checksums + tar dist/ -> elastic-
 - `type: "file"` — downloads `url` verbatim to `dest` (e.g. CISA KEV). `.json` dests are validated as JSON.
 - `type: "taxii"` — pulls a TAXII 2.x collection: `url` is the API root and `collection` a title substring (or exact collection `id`); alternatively `url` may point straight at a `.../collections/<id>/objects/` endpoint. All pages are followed via the `more`/`next` envelope and flattened to `{"objects": [...]}` at `dest` (default `taxii/<name>.json`). `taxii_version` defaults to `2.1` (the Accept header version; use `2.0` for older servers); `limit` sets the TAXII page-size param.
 - `type: "github-release-asset"` — resolves `releases/latest` of `repo` and downloads the first asset whose name matches the `asset` regex (for assets whose names embed the release date). `dest` is a directory; the remote filename is kept.
+- `type: "oci-artifact"` — pulls the first layer of an OCI artifact (`registry`/`repo`/`tag`) through the standard anonymous Bearer-token flow and verifies the layer digest. For tools whose database ships as a registry artifact, not a file — e.g. `trivy-db:2`.
 
 `"skip_if_exists": true` on any feed skips it when the destination file already exists — useful for large date-versioned files.
 
@@ -83,6 +86,17 @@ The shipped config enables the CISA KEV file only; abuse.ch URLhaus + ThreatFox 
 - **Local tooling** — serve the zip as-is for hosts that consume a CVE JSON5 mirror directly.
 
 `ti_custom` isn't a fit here: CVE records aren't STIX indicator objects, and indicator-match rules don't consume `vulnerability` docs.
+
+**trivy databases** (`feeds/trivy/`): `db.tar.gz` is the `trivy-db:2` layer (`trivy.db` + `metadata.json`, ~140 MB); `java-db.tar.gz` is `trivy-java-db:1` (the GAV→vulnerability index, ~960 MB — needed for jar/pom scans). On each scanner host, seed trivy's cache:
+
+```bash
+mkdir -p ~/.cache/trivy/{db,java-db}
+curl -s <scheme>://<ear-fqdn>/feeds/trivy/db.tar.gz | tar -xz -C ~/.cache/trivy/db/
+curl -s <scheme>://<ear-fqdn>/feeds/trivy/java-db.tar.gz | tar -xz -C ~/.cache/trivy/java-db/
+TRIVY_SKIP_DB_UPDATE=true TRIVY_SKIP_JAVA_DB_UPDATE=true trivy fs /path/to/target
+```
+
+trivy then runs fully offline. The DBs refresh on every `task download:feeds` (content varies daily; the fixed names mean they always overwrite).
 
 ### Serving to ti_custom
 

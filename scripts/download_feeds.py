@@ -13,6 +13,12 @@ Config: files/feeds.json — a list under "feeds". Two types:
          release of "repo" — for release assets whose names contain the
          release date and so can't use a fixed URL. For this type "dest"
          is a directory; the remote filename is kept.
+  oci-artifact
+         download the first (single) layer of an OCI artifact —
+         "registry" (default ghcr.io), "repo", "tag" (default latest).
+         For tools like trivy whose database ships as a registry
+         artifact rather than a file; the layer is the tar.gz payload
+         and its digest is verified.
 
 Auth per feed is optional ("auth" object):
   {"type": "header", "env": "VAR", "header": "Authorization", "prefix": "Bearer "}
@@ -23,6 +29,7 @@ Any referenced env var that is unset skips the feed (not a failure).
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import re
@@ -149,6 +156,49 @@ def fetch_github_release(feed: dict, headers: dict) -> tuple[str, str, str]:
     )
 
 
+OCI_MANIFEST_MT = "application/vnd.oci.image.manifest.v1+json"
+
+
+def fetch_oci_artifact(feed: dict, headers: dict, dest: Path) -> None:
+    """Download an OCI artifact's first layer, verifying its digest."""
+    registry = feed.get("registry", "ghcr.io")
+    base = f"https://{registry}/v2/{feed['repo']}"
+    man_url = f"{base}/manifests/{feed.get('tag', 'latest')}"
+    h = {**UA, **headers, "Accept": OCI_MANIFEST_MT}
+    auth: dict = {}
+    try:
+        req = urllib.request.Request(man_url, headers=h)
+        manifest = json.loads(urlopen_retry(req).read())
+    except urllib.error.HTTPError as e:
+        if e.code != 401:
+            raise
+        # standard Bearer challenge: exchange at realm for an (anonymous) token
+        p = dict(re.findall(r'(\w+)="([^"]*)"', e.headers["WWW-Authenticate"]))
+        tok_url = p["realm"] + "?" + urllib.parse.urlencode(
+            {k: p[k] for k in ("service", "scope") if k in p}
+        )
+        auth = {"Authorization": "Bearer " + get_json(tok_url, headers)["token"]}
+        manifest = get_json(man_url, {**headers, **auth}, OCI_MANIFEST_MT)
+
+    layer = manifest["layers"][0]
+    req = urllib.request.Request(
+        f"{base}/blobs/{layer['digest']}", headers={**UA, **headers, **auth}
+    )
+    part = dest.with_name(dest.name + ".part")
+    digest = hashlib.sha256()
+    try:
+        with urlopen_retry(req) as r, open(part, "wb") as f:
+            while chunk := r.read(1 << 20):
+                digest.update(chunk)
+                f.write(chunk)
+        if digest.hexdigest() != layer["digest"].removeprefix("sha256:"):
+            raise RuntimeError(f"layer digest mismatch for {layer['digest']}")
+        part.rename(dest)
+    except Exception:
+        part.unlink(missing_ok=True)
+        raise
+
+
 def write_json(dest: Path, payload) -> None:
     part = dest.with_name(dest.name + ".part")
     part.write_text(json.dumps(payload))
@@ -196,6 +246,10 @@ def run_feed(feed: dict, out: Path) -> str:
     if feed.get("type") == "github-release-asset":
         fetch_file({"url": url}, headers, dest)
         return f"OK   {name}: {tag} -> {rel}"
+
+    if feed.get("type") == "oci-artifact":
+        fetch_oci_artifact(feed, headers, dest)
+        return f"OK   {name} -> {rel}"
 
     if feed.get("type") == "taxii":
         objects = fetch_taxii(feed, headers)

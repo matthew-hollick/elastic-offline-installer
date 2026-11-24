@@ -12,6 +12,8 @@ vars:
   TARGET_ARCH: amd64              # target servers (amd64|arm64); dev laptop is arm
   EPR_VERSION: latest             # package-registry git tag
   SNMP_EXPORTER_VERSION: v0.31.0
+  TRIVY_VERSION: v0.76.2              # docker tag is the gh tag without the 'v'
+  CHECKOV_VERSION: 3.4.6
   CONTAINER_PLATFORM: linux/amd64
   CADDY_VERSION: latest             # static binary serving the EAR over HTTPS
   DIAG_VERSION: latest              # elastic/support-diagnostics release tag
@@ -72,6 +74,8 @@ tasks:
     env:
       STACK_VERSION: "{{.STACK_VERSION}}"
       SNMP_EXPORTER_VERSION: "{{.SNMP_EXPORTER_VERSION}}"
+      TRIVY_VERSION: "{{.TRIVY_VERSION}}"
+      CHECKOV_VERSION: "{{.CHECKOV_VERSION}}"
       CONTAINER_PLATFORM: "{{.CONTAINER_PLATFORM}}"
       OUT_DIR: "{{.DIST_DIR}}/containers"
     cmds: [./scripts/save_containers.sh]

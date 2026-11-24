@@ -9,6 +9,8 @@ set -euo pipefail
 
 STACK_VERSION="${STACK_VERSION:?STACK_VERSION is required}"
 SNMP_EXPORTER_VERSION="${SNMP_EXPORTER_VERSION:-v0.31.0}"
+TRIVY_VERSION="${TRIVY_VERSION:-v0.76.2}"       # gh tag is v-prefixed; docker tag isn't
+CHECKOV_VERSION="${CHECKOV_VERSION:-3.4.6}"
 CONTAINER_PLATFORM="${CONTAINER_PLATFORM:-linux/amd64}"
 OUT_DIR="$(realpath -m "${OUT_DIR:-dist/containers}")"
 SKOPEO_IMAGE="${SKOPEO_IMAGE:-quay.io/skopeo/stable:latest}"
@@ -23,6 +25,8 @@ images=(
   "docker.elastic.co/logstash/logstash:${STACK_VERSION}"
   "docker.elastic.co/elastic-maps-service/elastic-maps-server-ubi:${STACK_VERSION}"
   "prom/snmp-exporter:${SNMP_EXPORTER_VERSION}"
+  "aquasec/trivy:${TRIVY_VERSION#v}"
+  "bridgecrew/checkov:${CHECKOV_VERSION}"
   "$SKOPEO_IMAGE"
   "$BUILDAH_IMAGE"
 )
