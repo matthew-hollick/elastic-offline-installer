@@ -1,0 +1,39 @@
+name: elastic-offline-smoke
+title: Elastic offline bundle smoke tests
+maintainer: elastic-offline-installer
+copyright: MIT
+license: MIT
+summary: HTTP(S) endpoint checks for the EAR, EPR, Elasticsearch and Kibana
+version: 0.1.0
+supports:
+  - platform: os
+inputs:
+  - name: ear_url
+    description: EAR base URL, no trailing slash
+    type: string
+    required: true
+  - name: epr_url
+    description: EPR base URL, no trailing slash
+    type: string
+    required: true
+  - name: es_url
+    description: Elasticsearch base URL, no trailing slash
+    type: string
+    required: true
+  - name: kibana_url
+    description: Kibana base URL, no trailing slash
+    type: string
+    required: true
+  - name: stack_version
+    type: string
+    value: "9.5.7"
+  - name: es_user
+    type: string
+    value: elastic
+  - name: es_password
+    type: string
+    sensitive: true
+  - name: insecure
+    description: skip TLS verification (self-signed certs inside the air-gap)
+    type: boolean
+    value: true

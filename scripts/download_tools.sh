@@ -87,3 +87,9 @@ install -m 0755 files/tools/vulnscan.py "$OUT_DIR/vulnscan.py"
 install -m 0755 files/tools/push_containers.sh "$OUT_DIR/push_containers.sh"
 install -m 0644 files/tools/vulnscan.service files/tools/vulnscan.timer "$OUT_DIR/"
 echo "== copied import_cvelist.py, vulnscan.{py,service,timer}, push_containers.sh"
+
+# InSpec/Cinc Auditor smoke-test profile for the deployed endpoints
+AUDIT_DIR="$(dirname "$OUT_DIR")/audit"
+rm -rf "$AUDIT_DIR"
+cp -r files/audit "$AUDIT_DIR"
+echo "== copied audit profile to $AUDIT_DIR"

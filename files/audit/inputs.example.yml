@@ -1,0 +1,8 @@
+ear_url: https://ear.local
+epr_url: http://epr.local:8080
+es_url: https://es01.local:9200
+kibana_url: https://kibana.local:5601
+stack_version: "9.5.7"
+es_user: elastic
+es_password: changeme
+insecure: true

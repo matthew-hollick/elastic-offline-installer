@@ -46,6 +46,7 @@ Plus tools in `dist/tools/`:
 - `import_cvelist.py` — bulk-loads the mirrored cvelistV5 corpus into an ES index as ECS `vulnerability.*` docs (see [Feeds](#feeds); run with `--help` for options incl. the enrich-policy example)
 - `vulnscan.py` + `vulnscan.service`/`.timer` — centrally scans osquery package inventory with the trivy container and writes findings to `vulns-default` (see [Vulnerability scanning](#vulnerability-scanning))
 - `push_containers.sh` — loads every `dist/containers/*.tar.gz` on a docker host and pushes them to a Harbor registry, preserving upstream repo paths under your project (`docker.elastic.co/elastic-agent/elastic-agent:9.5.7` → `harbor.local/<project>/elastic-agent/elastic-agent:9.5.7`)
+- `dist/audit/` — a [Cinc Auditor](https://cinc.sh/) (open InSpec) smoke-test profile for the deployed EAR/EPR/Elasticsearch/Kibana endpoints — see [Smoke testing](#smoke-testing)
 
 ## Building the bundle
 
@@ -133,6 +134,18 @@ systemctl enable --now vulnscan.timer
 ```
 
 Remember to grant the `vulns-*` pattern in your ES roles — analysts' `logs-*` grants won't cover it.
+
+### Smoke testing
+
+`dist/audit/` is an [InSpec](https://www.inspec.io/)-compatible profile runnable by the bundled `cincproject/auditor` image (the Apache-2.0 community build — Chef InSpec itself went subscription-only). 13 controls verify the deployed endpoints: the EAR serves artifacts/checksums/GPG key/GeoIP manifest/KEV feed, the EPR answers `/health`/`/search` and serves a package zip, Elasticsearch answers `/` + `/_cluster/health` and rejects unauthenticated requests, and Kibana answers `/api/status` + `/login`.
+
+```bash
+cp dist/audit/inputs.example.yml dist/audit/inputs.yml   # fill in your hostnames + creds
+docker run --rm --network host -v "$PWD/dist/audit:/profile" cincproject/auditor:7.3.4 \
+  exec /profile --input-file /profile/inputs.yml
+```
+
+Creds/URLs go in the inputs file (`--input-file`), or override individually with `--input name=value`. `insecure: true` skips TLS verification for self-signed certs inside the air-gap; set `false` once the hosts trust your CA. Demonstration-grade — extend `controls/*.rb` as the deployment grows.
 
 ### Serving to ti_custom
 
