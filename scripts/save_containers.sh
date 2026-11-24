@@ -20,6 +20,8 @@ mkdir -p "$OUT_DIR"
 # Payload images plus the tool images themselves.
 images=(
   "docker.elastic.co/elastic-agent/elastic-agent:${STACK_VERSION}"
+  "docker.elastic.co/logstash/logstash:${STACK_VERSION}"
+  "docker.elastic.co/elastic-maps-service/elastic-maps-server-ubi:${STACK_VERSION}"
   "prom/snmp-exporter:${SNMP_EXPORTER_VERSION}"
   "$SKOPEO_IMAGE"
   "$BUILDAH_IMAGE"

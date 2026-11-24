@@ -10,9 +10,11 @@ This laptop is arm but our production servers are amd64. we need to be able to d
 
 We need to build out an EAR (Elastic Artifact Registry) for hosting on a webserver. The directory layout mirrors https://artifacts.elastic.co/downloads/ so it can be pointed to directly as the Fleet "agent binary download source" and the Endpoint artifact repository:
 
-- .deb files for elasticsearch, kibana, elastic-agent
+- .deb files for elasticsearch, kibana, elastic-agent, logstash
 - linux tar.gz and windows zip for all agent-downloadable components: elastic-agent, fleet-server, apm-server, auditbeat, filebeat, heartbeat, metricbeat, osquerybeat, packetbeat, cloudbeat (linux only), endpoint-security (Elastic Defend), winlogbeat (windows only)
 - every artifact accompanied by its .sha512 checksum and .asc signature
+- `GPG-KEY-elasticsearch` at the webroot so .asc signatures can be verified offline
+- `geoip/` — GeoLite2 .tgz databases + a rewritten `database.json` manifest for `ingest.geoip.downloader.endpoint` (many integrations' geoip/enrich pipelines fail silently without this)
 
 We need to build an EPR (Elastic Package Registory)
 - Consider https://github.com/elastic/custom-epr-builder but I want to run outside of Docker so that I can easilly add new integrations as they become available.
@@ -20,10 +22,16 @@ We need to build an EPR (Elastic Package Registory)
 - A systemd service definition
 
 There are additional containers that we need to bring with us:
-- Elastic Agent
+- Elastic Agent (also covers containerised Fleet Server — there is no separate fleet-server image)
+- Logstash
+- Elastic Maps Server (`elastic-maps-server-ubi`, for offline Kibana maps)
 - Prometheus exporter for SNMP
+- skopeo + buildah tool images, so the toolchain works offline too
 
-Plus Elastic's support-diagnostics tool (`dist/tools/diagnostics-<ver>-dist.zip`) for capturing full platform state when Elastic Support asks — unzip on a node with a JRE and run `support-diagnostics.sh`.
+Plus tools in `dist/tools/`:
+- `diagnostics-<ver>-dist.zip` — Elastic's support-diagnostics tool, for capturing full platform state when Elastic Support asks
+- a Temurin JRE tarball — support-diagnostics is a Java tool; needed on hosts without a JDK (ES nodes have one bundled at `$ES_HOME/jdk`)
+- `elastic-package` (linux/amd64) — for building custom integrations on the offline side
 
 ## Building the bundle
 
@@ -48,5 +56,6 @@ task package                          # verify checksums + tar dist/ -> elastic-
 - `dist/epr/` -> `/opt/epr` — package-registry binary + `config.yml` + `epr.service` + `packages/` (create the `epr` user)
 - `dist/containers/elastic-epr-<version>.tar.gz` — alternative EPR deployment as a container (Elastic's recommended "distribution" image: registry + all packages baked in): `gunzip -c elastic-epr-<version>.tar.gz | docker load` then run with the registry port published (see the podman/systemd example in Elastic's air-gapped docs)
 - `dist/containers/` -> `gunzip -c <file>.tar.gz | docker load`
+- GeoIP: `sed -i 's/__EAR_HOST__/<ear-fqdn>/' /opt/ear/geoip/database.json`, then set `ingest.geoip.downloader.endpoint: https://<ear-fqdn>/geoip/database.json` in `elasticsearch.yml`
 
 Note on TLS and agents: Elastic Agent cannot pin trust for artifact downloads — either install the CA into each host's system trust store and use `https://`, or point agent binary sources at the `http://` endpoint (both are served).
