@@ -18,7 +18,7 @@ We need to build out an EAR (Elastic Artifact Registry) for hosting on a webserv
 - [`GPG-KEY-elasticsearch`](https://artifacts.elastic.co/GPG-KEY-elasticsearch) at the webroot so .asc signatures can be verified offline
 - `geoip/` — GeoLite2 .tgz databases + a rewritten `database.json` manifest for `ingest.geoip.downloader.endpoint` ([ingest/geoip settings](https://www.elastic.co/docs/reference/elasticsearch/configuration-reference/ingest-settings), [geoip processor](https://www.elastic.co/docs/reference/enrich-processor/geoip-processor)) — many integrations' geoip/enrich pipelines fail silently without this
 - `models/` — ML trained-model artifacts (opt-in, big): `task download:models` with `ML_MODELS` defaulting to `elser_model_2_linux-x86_64` (275 MB). Available: `elser_model_2` (438 MB, cross-platform), `multilingual-e5-small[_linux-x86_64]` (423–482 MB), `rerank-v1` (777 MB). See [ELSER](https://www.elastic.co/docs/explore-analyze/machine-learning/nlp/ml-nlp-elser) (incl. the air-gapped deployment section) and [ML settings](https://www.elastic.co/docs/reference/elasticsearch/configuration-reference/machine-learning-settings)
-- `feeds/` — third-party runtime feeds mirrored integrations otherwise fetch from the internet: `feeds/cisa/known_exploited_vulnerabilities.json` for the [CISA KEVs integration](https://www.elastic.co/docs/reference/integrations/cisa_kevs) (snapshot dated per `catalogVersion`; refresh by re-running `task download` and redeploying)
+- `feeds/` — third-party runtime feeds mirrored by `task download:feeds` (config: `files/feeds.json`, see [Feeds](#feeds) below): `feeds/cisa/known_exploited_vulnerabilities.json` for the [CISA KEVs integration](https://www.elastic.co/docs/reference/integrations/cisa_kevs), and `feeds/taxii/<name>.json` — TAXII 2.x collections flattened to `{"objects": [...]}` for [ti_custom](https://www.elastic.co/docs/reference/integrations/ti_custom). All snapshots — refresh by re-running and redeploying
 
 We need to build an EPR (Elastic Package Registry — [source](https://github.com/elastic/package-registry))
 - Consider https://github.com/elastic/custom-epr-builder but I want to run outside of Docker so that I can easilly add new integrations as they become available.
@@ -45,7 +45,7 @@ Requires [mise](https://mise.jdx.dev) and [Task](https://taskfile.dev). From a c
 ```bash
 mise install                          # one-time: go, task, python
 
-task download                         # EAR artifacts + integrations + containers + webserver
+task download                         # EAR artifacts + integrations + containers + webserver + tools + feeds
 task build                            # compiles package-registry (EPR)
 task build:integration -- https://github.com/FortytwoM/elastic-nessus-integration nessus
 task package                          # verify checksums + tar dist/ -> elastic-offline-bundle-<version>.tar.gz
@@ -53,7 +53,35 @@ task package                          # verify checksums + tar dist/ -> elastic-
 
 `KIBANA_CONSTRAINT='^8.13.0 || ^9.0.0'` can be set before `build:integration` to relax a package's declared `conditions.kibana.version` (see [package-spec conditions](https://github.com/elastic/package-spec)).
 
-## Deploying (offline side)
+## Feeds
+
+`task download:feeds` mirrors third-party runtime feeds into `dist/ear/feeds/` so repointable integrations work air-gapped. Config is `files/feeds.json`; each entry has `name`, `type`, `url`, optional `dest` (relative to `feeds/`), `enabled`, `description` and `auth`.
+
+- `type: "file"` — downloads `url` verbatim to `dest` (e.g. CISA KEV). `.json` dests are validated as JSON.
+- `type: "taxii"` — pulls a TAXII 2.x collection: `url` is the API root and `collection` a title substring (or exact collection `id`); alternatively `url` may point straight at a `.../collections/<id>/objects/` endpoint. All pages are followed via the `more`/`next` envelope and flattened to `{"objects": [...]}` at `dest` (default `taxii/<name>.json`). `taxii_version` defaults to `2.1` (the Accept header version; use `2.0` for older servers); `limit` sets the TAXII page-size param.
+
+Auth is per-feed and env-gated — **a feed whose referenced env var is unset is skipped, not failed**, so key-gated feeds can stay in the config and only download once the key is exported:
+
+```json
+"auth": { "type": "header", "env": "MY_FEED_KEY", "header": "Authorization", "prefix": "Bearer " }
+"auth": { "type": "basic", "username": "guest", "password": "guest" }
+"auth": { "type": "basic", "username_env": "FEED_USER", "password_env": "FEED_PASS" }
+```
+
+The shipped config enables the CISA KEV file only; abuse.ch URLhaus + ThreatFox via [Anomali Limo](https://limo.anomali.com/) (free TAXII 2.x, guest/guest, no registration), MITRE ATT&CK, and a key-gated template ship `enabled: false` — flip to `true` for servers your network can reach.
+
+### Serving to ti_custom
+
+The [ti_custom integration](https://www.elastic.co/docs/reference/integrations/ti_custom) ingests STIX indicators via a CEL input that GETs `url`, decodes the JSON body and maps `body.objects[]` into events — exactly the shape `download:feeds` writes. Configure the integration:
+
+- `url` → `<scheme>://<ear-fqdn>/feeds/taxii/<name>.json`
+- `enable_taxii` → leave on, but **leave `initial_interval` empty** — when set, the TAXII program appends `/?added_after=...` to the URL, which 404s on a static file. Without it the agent re-fetches the whole file each `interval` (a full snapshot per poll — correct for a static mirror).
+- `restrict_stix` → keep `true` (non-STIX-2.1 objects are dropped upstream of ingest anyway).
+- `feed_name`, `ioc_expiration_duration` → as desired.
+
+The resulting indicators land in `logs-ti_custom.*` and feed [indicator-match rules](https://www.elastic.co/docs/solutions/security/detect-and-alert/indicator-match). Feeds are point-in-time snapshots — no delta updates; re-run `task download:feeds` and redeploy the bundle to refresh.
+
+Alternative: `ti_custom` also has a `filestream` input that reads a STIX bundle/JSON file placed directly on the agent host — no EAR dependency, but you distribute the file yourself.
 
 - `rsync -a dist/ear/ /opt/ear/` — EAR webroot contents (mind the trailing slash: the Caddy root is `/opt/ear` itself), served by [Caddy](https://caddyserver.com/docs/) with [`file_server`](https://caddyserver.com/docs/caddyfile/directives/file_server)
 - `rsync -a dist/web/ /opt/ear-web/` — Caddy binary + `Caddyfile` + `ear.service` (create the `caddy` user per the unit comments; edit the hostname in `Caddyfile` to match the cert SAN)
@@ -64,6 +92,7 @@ task package                          # verify checksums + tar dist/ -> elastic-
 - Fleet agent binary download source: `<scheme>://<ear-fqdn>/downloads/` (trailing slash matters — agents append `beats/...` to it)
 - Elastic Defend: in each Defend integration policy's advanced settings, set `advanced.artifacts.global.base_url` (and its `<os>.advanced.artifacts.global.base_url` variants) to `<scheme>://<ear-fqdn>` — agents then fetch `/downloads/endpoint/...` for detection signatures/models (see [offline endpoints guide](https://www.elastic.co/docs/solutions/security/configure-elastic-defend/configure-offline-endpoints-air-gapped-environments)). The `ETag` header is mandatory for artifact updates; Caddy's `file_server` sends it by default.
 - CISA KEVs integration: set the `url` variable to `<scheme>://<ear-fqdn>/feeds/cisa/known_exploited_vulnerabilities.json` (the `url` var is exposed in the [integration's configuration](https://www.elastic.co/docs/reference/integrations/cisa_kevs)); note the mirrored file is a point-in-time snapshot
+- ti_custom integration (mirrored TAXII feeds): set `url` to `<scheme>://<ear-fqdn>/feeds/taxii/<name>.json` and leave `initial_interval` empty — see [Feeds](#serving-to-ti_custom)
 - GeoIP: `sed -i 's|__EAR_BASE_URL__|https://<ear-fqdn>|' /opt/ear/geoip/database.json`, then set `ingest.geoip.downloader.endpoint: https://<ear-fqdn>/geoip/database.json` in `elasticsearch.yml` ([ingest settings](https://www.elastic.co/docs/reference/elasticsearch/configuration-reference/ingest-settings)). Use the `http://` scheme if ES nodes don't trust the EAR's CA
 - ML models (if `download:models` was run): set `xpack.ml.model_repository: <scheme>://<ear-fqdn>/models/` in `elasticsearch.yml` ([ML settings](https://www.elastic.co/docs/reference/elasticsearch/configuration-reference/machine-learning-settings)) — Kibana's Trained Models page then "downloads" ELSER/e5/rerank from the EAR. Alternative: copy the model files into `$ES_HOME/config/models/` on all master-eligible nodes and point `xpack.ml.model_repository` at `file://${path.home}/config/models/` — both described in the [ELSER air-gapped section](https://www.elastic.co/docs/explore-analyze/machine-learning/nlp/ml-nlp-elser)
 

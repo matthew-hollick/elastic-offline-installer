@@ -1,0 +1,48 @@
+{
+  "$schema_comment": "Runtime feeds mirrored into dist/ear/feeds/ and served by the EAR. See README 'Feeds'. Types: 'file' downloads a URL verbatim; 'taxii' pulls a TAXII 2.x collection (all pages) and flattens it to {\"objects\": [...]} for the ti_custom integration's CEL input. Auth is optional per feed; any referenced env var that is unset causes the feed to be skipped, not failed. Set 'enabled': false to skip a feed entirely. 'dest' is relative to dist/ear/feeds/ (taxii feeds default to taxii/<name>.json).",
+
+  "feeds": [
+    {
+      "name": "cisa-kev",
+      "type": "file",
+      "description": "CISA Known Exploited Vulnerabilities catalog; the cisa_kevs integration's `url` var is repointed at this file",
+      "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+      "dest": "cisa/known_exploited_vulnerabilities.json"
+    },
+    {
+      "name": "limo-urlhaus",
+      "enabled": false,
+      "type": "taxii",
+      "description": "abuse.ch URLhaus malware URLs via Anomali Limo (free TAXII 2.x, guest/guest) — enable if limo.anomali.com is reachable",
+      "url": "https://limo.anomali.com/api/v1/taxii2/feeds/",
+      "collection": "URLhaus",
+      "auth": { "type": "basic", "username": "guest", "password": "guest" }
+    },
+    {
+      "name": "limo-threatfox",
+      "enabled": false,
+      "type": "taxii",
+      "description": "abuse.ch ThreatFox IOCs via Anomali Limo (free TAXII 2.x, guest/guest) — enable if limo.anomali.com is reachable",
+      "url": "https://limo.anomali.com/api/v1/taxii2/feeds/",
+      "collection": "ThreatFox",
+      "auth": { "type": "basic", "username": "guest", "password": "guest" }
+    },
+    {
+      "name": "mitre-attack-enterprise",
+      "enabled": false,
+      "type": "taxii",
+      "description": "MITRE ATT&CK Enterprise — TTPs/tools rather than IoCs; enable to smoke-test the TAXII path",
+      "url": "https://cti-taxii.mitre.org/stix/",
+      "collection": "Enterprise ATT&CK"
+    },
+    {
+      "name": "example-keyed-feed",
+      "enabled": false,
+      "type": "taxii",
+      "description": "Template for a key-gated feed: export the env var before `task download:feeds`; skipped while unset",
+      "url": "https://taxii2.example.com/api/collections/",
+      "collection": "indicators",
+      "auth": { "type": "header", "env": "EXAMPLE_FEED_API_KEY", "header": "Authorization", "prefix": "Bearer " }
+    }
+  ]
+}

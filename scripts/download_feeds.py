@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""Download third-party runtime feeds into dist/ear/feeds for EAR to serve.
+
+Config: files/feeds.json — a list under "feeds". Two types:
+
+  file   download a URL verbatim (e.g. the CISA KEV JSON consumed by the
+         cisa_kevs integration's `url` var)
+  taxii  pull a TAXII 2.x collection (all pages) and flatten it to
+         {"objects": [...]} — the shape ti_custom's CEL input maps into
+         events, so the static file acts as a single-page collection
+
+Auth per feed is optional ("auth" object):
+  {"type": "header", "env": "VAR", "header": "Authorization", "prefix": "Bearer "}
+  {"type": "basic", "username": "u", "password": "p"}
+  {"type": "basic", "username_env": "U", "password_env": "P"}
+Any referenced env var that is unset skips the feed (not a failure).
+"""
+
+import argparse
+import base64
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+UA = {"User-Agent": "elastic-offline-installer"}
+
+
+def urlopen_retry(req: urllib.request.Request, retries: int = 3):
+    """urlopen with backoff for transient 5xx/connection errors."""
+    for attempt in range(retries):
+        try:
+            return urllib.request.urlopen(req, timeout=120)
+        except (urllib.error.URLError, OSError):
+            if attempt == retries - 1:
+                raise
+            time.sleep(2**attempt)
+
+
+def auth_headers(feed: dict) -> tuple[dict, str | None]:
+    """Headers for the feed, or a skip reason when a needed env var is unset."""
+    auth = feed.get("auth")
+    if not auth:
+        return {}, None
+
+    def env(name: str | None) -> tuple[str | None, str | None]:
+        if name and name not in os.environ:
+            return None, f"env var {name} not set"
+        return os.environ.get(name, ""), None
+
+    if auth.get("type") == "header":
+        val, missing = env(auth.get("env"))
+        if missing:
+            return {}, missing
+        return {auth["header"]: auth.get("prefix", "") + val}, None
+
+    if auth.get("type") == "basic":
+        user, pw = auth.get("username"), auth.get("password")
+        if user is None:
+            user, missing = env(auth.get("username_env"))
+            if missing:
+                return {}, missing
+        if pw is None:
+            pw, missing = env(auth.get("password_env"))
+            if missing:
+                return {}, missing
+        token = base64.b64encode(f"{user}:{pw}".encode()).decode()
+        return {"Authorization": f"Basic {token}"}, None
+
+    return {}, f"unsupported auth type {auth.get('type')!r}"
+
+
+def get_json(url: str, headers: dict, accept: str | None = None):
+    h = {**UA, **headers}
+    if accept:
+        h["Accept"] = accept
+    req = urllib.request.Request(url, headers=h)
+    with urlopen_retry(req) as r:
+        return json.load(r)
+
+
+def taxii_accept(feed: dict) -> str:
+    return f"application/taxii+json;version={feed.get('taxii_version', '2.1')}"
+
+
+def resolve_collection(feed: dict, headers: dict) -> str:
+    """Find a collection id on the API root by title substring or exact id."""
+    api_root = feed["url"].rstrip("/")
+    data = get_json(f"{api_root}/collections/", headers, taxii_accept(feed))
+    cols = data.get("collections", [])
+    want = feed["collection"].lower()
+    for c in cols:
+        if c.get("id") == feed["collection"] or want in c.get("title", "").lower():
+            return c["id"]
+    known = ", ".join(f"{c.get('id')} ({c.get('title')})" for c in cols)
+    raise RuntimeError(
+        f"collection {feed['collection']!r} not found on {api_root}; available: {known}"
+    )
+
+
+def fetch_taxii(feed: dict, headers: dict) -> list:
+    """Follow the TAXII objects endpoint across `more`/`next` pages."""
+    if feed.get("collection"):
+        cid = resolve_collection(feed, headers)
+        url = f"{feed['url'].rstrip('/')}/collections/{cid}/objects/"
+    else:
+        url = feed["url"]
+
+    if feed.get("limit"):
+        url += ("&" if urllib.parse.urlparse(url).query else "?") + f"limit={feed['limit']}"
+
+    objects = []
+    while url:
+        envelope = get_json(url, headers, taxii_accept(feed))
+        objects += envelope.get("objects", [])
+        nxt = envelope.get("next")
+        url = (
+            url
+            + ("&" if urllib.parse.urlparse(url).query else "?")
+            + "next="
+            + urllib.parse.quote(str(nxt), safe="")
+            if envelope.get("more") and nxt
+            else None
+        )
+    return objects
+
+
+def write_json(dest: Path, payload) -> None:
+    part = dest.with_name(dest.name + ".part")
+    part.write_text(json.dumps(payload))
+    part.rename(dest)
+
+
+def fetch_file(feed: dict, headers: dict, dest: Path) -> None:
+    part = dest.with_name(dest.name + ".part")
+    req = urllib.request.Request(feed["url"], headers={**UA, **headers})
+    try:
+        with urlopen_retry(req) as r, open(part, "wb") as f:
+            while chunk := r.read(1 << 20):
+                f.write(chunk)
+        if dest.suffix == ".json":  # catches HTML error pages masquerading as JSON
+            with open(part) as f:
+                json.load(f)
+        part.rename(dest)
+    except Exception:
+        part.unlink(missing_ok=True)
+        raise
+
+
+def run_feed(feed: dict, out: Path) -> str:
+    name = feed.get("name", "?")
+    if feed.get("enabled") is False:
+        return f"SKIP {name}: disabled"
+    headers, skip = auth_headers(feed)
+    if skip:
+        return f"SKIP {name}: {skip}"
+
+    rel = Path(feed.get("dest", f"taxii/{name}.json"))
+    dest = out / rel
+    if rel.is_absolute() or not dest.resolve().is_relative_to(out.resolve()):
+        raise ValueError(f"unsafe dest {rel}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    if feed.get("type") == "taxii":
+        objects = fetch_taxii(feed, headers)
+        write_json(dest, {"objects": objects})
+        return f"OK   {name}: {len(objects)} object(s) -> {dest.relative_to(out)}"
+    fetch_file(feed, headers, dest)
+    return f"OK   {name} -> {dest.relative_to(out)}"
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--config", default="files/feeds.json")
+    ap.add_argument("--dest", default="dist/ear/feeds")
+    ap.add_argument("names", nargs="*", help="limit to these feed names")
+    args = ap.parse_args()
+
+    feeds = json.loads(Path(args.config).read_text())["feeds"]
+    out = Path(args.dest)
+    out.mkdir(parents=True, exist_ok=True)
+
+    failures = 0
+    for feed in feeds:
+        if args.names and feed.get("name") not in args.names:
+            continue
+        try:
+            print(run_feed(feed, out), flush=True)
+        except Exception as exc:
+            print(f"FAIL {feed.get('name', '?')}: {exc}", file=sys.stderr, flush=True)
+            failures += 1
+
+    if failures:
+        print(f"== done with {failures} failure(s)", file=sys.stderr)
+        return 1
+    print(f"== feeds mirrored into {out}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

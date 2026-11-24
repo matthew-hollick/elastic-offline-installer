@@ -24,8 +24,8 @@ tasks:
     silent: true
 
   download:
-    desc: Download everything (EAR artifacts, integrations, containers, webserver, tools)
-    deps: [download:ear, download:integrations, download:containers, download:webserver, download:tools]
+    desc: Download everything (EAR artifacts, integrations, containers, webserver, tools, feeds)
+    deps: [download:ear, download:integrations, download:containers, download:webserver, download:tools, download:feeds]
 
   download:ear:
     desc: Stack artifacts (deb + tar.gz/zip + sha512/asc), GPG key, GeoIP mirror
@@ -54,6 +54,11 @@ tasks:
       DIAG_VERSION: "{{.DIAG_VERSION}}"
       OUT_DIR: "{{.DIST_DIR}}/tools"
     cmds: [./scripts/download_tools.sh]
+
+  download:feeds:
+    desc: Third-party runtime feeds (CISA KEV, STIX/TAXII threat intel) into dist/ear/feeds
+    cmds:
+      - python3 scripts/download_feeds.py --config files/feeds.json --dest {{.DIST_DIR}}/ear/feeds {{.CLI_ARGS}}
 
   download:models:
     desc: "ML trained models into dist/ear/models (big; opt-in). ML_MODELS='elser_model_2_linux-x86_64 rerank-v1' task download:models"
