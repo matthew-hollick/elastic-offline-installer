@@ -29,10 +29,10 @@ base="https://github.com/elastic/support-diagnostics/releases/download/${DIAG_VE
 if [[ -f "$OUT_DIR/$zip" ]]; then
   echo "  exists: $zip"
 else
-  curl -fsSL --retry 3 -o "$OUT_DIR/$zip.part" "$base/$zip"
+  curl -fsSL -C - --retry 2 --retry-all-errors --connect-timeout 30 -o "$OUT_DIR/$zip.part" "$base/$zip"
   mv "$OUT_DIR/$zip.part" "$OUT_DIR/$zip"
 fi
-curl -fsSL --retry 3 -o "$OUT_DIR/$zip.sha256" "$base/$zip.sha256"
+curl -fsSL -C - --retry 2 --retry-all-errors --connect-timeout 30 -o "$OUT_DIR/$zip.sha256" "$base/$zip.sha256"
 
 echo "== verifying sha256"
 (cd "$OUT_DIR" && sha256sum -c "$zip.sha256")
@@ -49,7 +49,7 @@ print(p["name"], p["link"], p["checksum"])
 if [[ -f "$OUT_DIR/$jre_name" ]]; then
   echo "  exists: $jre_name"
 else
-  curl -fsSL --retry 3 -o "$OUT_DIR/$jre_name.part" "$jre_link"
+  curl -fsSL -C - --retry 2 --retry-all-errors --connect-timeout 30 -o "$OUT_DIR/$jre_name.part" "$jre_link"
   mv "$OUT_DIR/$jre_name.part" "$OUT_DIR/$jre_name"
 fi
 echo "$jre_sum  $OUT_DIR/$jre_name" | sha256sum -c -
@@ -66,8 +66,8 @@ eptar="elastic-package_${epver}_linux_amd64.tar.gz"
 echo "== elastic-package $ELASTIC_PACKAGE_VERSION (linux/amd64)"
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-curl -fsSL --retry 3 -o "$tmp/$eptar" "$epbase/$eptar"
-curl -fsSL --retry 3 -o "$tmp/checksums.txt" "$epbase/elastic-package_${epver}_checksums.txt"
+curl -fsSL -C - --retry 2 --retry-all-errors --connect-timeout 30 -o "$tmp/$eptar" "$epbase/$eptar"
+curl -fsSL -C - --retry 2 --retry-all-errors --connect-timeout 30 -o "$tmp/checksums.txt" "$epbase/elastic-package_${epver}_checksums.txt"
 line=$(grep "  $eptar\$" "$tmp/checksums.txt")
 case "$(awk '{print length($1)}' <<<"$line")" in
   64)  sum=sha256sum ;;

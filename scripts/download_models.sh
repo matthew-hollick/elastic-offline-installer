@@ -26,10 +26,22 @@ read -ra models <<< "$ML_MODELS"
 ((${#models[@]})) || { echo "error: ML_MODELS is empty" >&2; exit 1; }
 
 fetch() {
-  local url="$1" dest="$2"
+  local url="$1" dest="$2" attempt
   echo "  downloading: $(basename "$dest")"
-  curl -fsSL --retry 3 -o "$dest.part" "$url"
-  mv "$dest.part" "$dest"
+  # -C - resumes the .part across attempts; --retry-all-errors covers
+  # CURLE_RECV_ERROR (56) which --retry alone doesn't retry on
+  for attempt in 1 2 3 4 5; do
+    if curl -fsSL -C - --retry 2 --retry-all-errors --connect-timeout 30 \
+         -o "$dest.part" "$url"; then
+      mv "$dest.part" "$dest"
+      return
+    fi
+    echo "  attempt $attempt/5 failed ($(basename "$dest")); retrying" >&2
+    sleep "$((attempt * 3))"
+  done
+  rm -f "$dest.part"
+  echo "error: download failed: $url" >&2
+  return 1
 }
 
 for model in "${models[@]}"; do

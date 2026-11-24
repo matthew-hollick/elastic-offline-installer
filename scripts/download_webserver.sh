@@ -24,8 +24,8 @@ trap 'rm -rf "$tmp"' EXIT
 base="https://github.com/caddyserver/caddy/releases/download/${CADDY_VERSION}"
 tarball="caddy_${ver}_linux_${GO_ARCH}.tar.gz"
 
-curl -fsSL --retry 3 -o "$tmp/$tarball" "$base/$tarball"
-curl -fsSL --retry 3 -o "$tmp/checksums.txt" "$base/caddy_${ver}_checksums.txt"
+curl -fsSL -C - --retry 2 --retry-all-errors --connect-timeout 30 -o "$tmp/$tarball" "$base/$tarball"
+curl -fsSL -C - --retry 2 --retry-all-errors --connect-timeout 30 -o "$tmp/checksums.txt" "$base/caddy_${ver}_checksums.txt"
 
 echo "== verifying sha512"
 (cd "$tmp" && grep "  $tarball\$" checksums.txt | sha512sum -c -)

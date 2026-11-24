@@ -76,15 +76,27 @@ DEB_PREFIXES=(
 )
 
 fetch() {
-  local url="$1" dest="$2"
+  local url="$1" dest="$2" attempt
   mkdir -p "$(dirname "$dest")"
   if [[ -f "$dest" ]]; then
     echo "  exists: ${dest#$OUT_DIR/}"
-  else
-    echo "  downloading: $(basename "$dest")"
-    curl -fsSL --retry 3 -o "$dest.part" "$url"
-    mv "$dest.part" "$dest"
+    return
   fi
+  echo "  downloading: $(basename "$dest")"
+  # -C - resumes the .part across attempts; --retry-all-errors covers
+  # CURLE_RECV_ERROR (56) which --retry alone doesn't retry on
+  for attempt in 1 2 3 4 5; do
+    if curl -fsSL -C - --retry 2 --retry-all-errors --connect-timeout 30 \
+         -o "$dest.part" "$url"; then
+      mv "$dest.part" "$dest"
+      return
+    fi
+    echo "  attempt $attempt/5 failed ($(basename "$dest")); retrying" >&2
+    sleep "$((attempt * 3))"
+  done
+  rm -f "$dest.part"
+  echo "error: download failed: $url" >&2
+  return 1
 }
 
 download() {
