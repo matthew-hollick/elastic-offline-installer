@@ -70,6 +70,19 @@ task package                          # verify checksums + tar dist/ -> elastic-
 
 `KIBANA_CONSTRAINT='^8.13.0 || ^9.0.0'` can be set before `build:integration` to relax a package's declared `conditions.kibana.version` (see [package-spec conditions](https://github.com/elastic/package-spec)).
 
+## Artifact manifest + incremental packaging
+
+Downloads are already incremental — every downloader skips files that exist in `dist/`, so re-running `task download` after a version bump only fetches what's new (delete a file to force a refetch). On top of that, `task package` records **every artifact** into `dist/manifest.json` — path, size, sha512, component — and ships it inside the bundle as the inventory of what was packaged.
+
+```bash
+task manifest          # (re)write dist/manifest.json from current dist/ contents
+task manifest:diff     # what is new / changed / missing vs the last recorded manifest
+task manifest:verify   # re-hash everything, report drift vs the manifest
+task package:delta     # tar ONLY new/changed artifacts -> elastic-offline-delta-<ver>-<ts>.tar.gz
+```
+
+The workflow for shipping an update without re-sneakerneting 7 GB: bump a version var, `task download` (pulls only the new files), `task package:delta` — produces a small tar of just the new/changed artifacts plus `manifest-delta.json` (what this delta contains, which baseline it was diffed against), and refreshes `dist/manifest.json` as the new baseline. A delta can't delete files on the target — artifacts removed from `dist/` are listed as `missing` in the diff but the target keeps its stale copies until cleaned up there.
+
 ## Feeds
 
 `task download:feeds` mirrors third-party runtime feeds into `dist/ear/feeds/` so repointable integrations work air-gapped. Config is `files/feeds.json`; each entry has `name`, `type`, `url`, optional `dest` (relative to `feeds/`), `enabled`, `description` and `auth`.
