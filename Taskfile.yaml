@@ -38,7 +38,7 @@ tasks:
       - task: package
 
   download:
-    desc: Download everything (EAR artifacts, integrations, containers, webserver, tools, feeds)
+    desc: Download everything (EAR artifacts, integrations, containers, webserver, tools, feeds). Opt-in extras, excluded for size: download:docs[:<section>], download:models
     deps: [download:ear, download:integrations, download:containers, download:webserver, download:tools, download:feeds]
 
   download:ear:
