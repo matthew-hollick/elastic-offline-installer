@@ -71,6 +71,8 @@ while IFS= read -r u; do
   idx="$OUT_DIR${rel}/index.html"
   [[ -f "$page" || -f "$idx" ]] || echo "$u"
 done < "$urls" > "$todo"
+# the /docs landing page rides along regardless of scope
+[[ -f "$OUT_DIR/docs/index.html" ]] || echo "$BASE/docs" >> "$todo"
 echo "== $(wc -l < "$urls") of $(wc -l < "$urls_all") sitemap URLs match DOCS_SCOPE; $(wc -l < "$todo") to fetch"
 
 # --- parallel mirror ----------------------------------------------------------

@@ -81,12 +81,85 @@ tasks:
       OUT_DIR: "{{.DIST_DIR}}/ear/models"
     cmds: [./scripts/download_models.sh]
 
-  download:docs:
-    desc: "Mirror www.elastic.co/docs into dist/ear/docs (www.elastic.co vhost). Slow first run (~15k pages); DOCS_SCOPE/DOCS_PARALLEL/DOCS_WAIT tune it"
+  _download-docs:
+    desc: internal — docs-mirror helper; call via download:docs[:<section>]
+    internal: true
     env:
       OUT_DIR: "{{.DIST_DIR}}/ear"
       WORK_DIR: .build/docs-work
+      DOCS_SCOPE: "{{.SCOPE}}"
     cmds: [./scripts/download_docs.sh]
+
+  # One task per top-level section of the docs sitemap (page counts
+  # approximate). All share the same checkout in dist/ear/docs — sections
+  # are additive, and re-runs skip pages already mirrored. `task
+  # download:docs` mirrors everything (~15k pages, several GB, hours on
+  # first run; incremental afterwards).
+  download:docs:
+    desc: "Mirror ALL of www.elastic.co/docs into dist/ear/docs"
+    cmds:
+      - task: _download-docs
+        vars: {SCOPE: "^https://www\\.elastic\\.co/docs"}
+
+  download:docs:reference:
+    desc: "docs: /docs/reference/* — product references, the bulk (~7.3k pages)"
+    cmds:
+      - task: _download-docs
+        vars: {SCOPE: '/docs/reference(/|$)'}
+
+  download:docs:api:
+    desc: "docs: /docs/api/* — REST API references (~4.6k pages)"
+    cmds:
+      - task: _download-docs
+        vars: {SCOPE: '/docs/api(/|$)'}
+
+  download:docs:solutions:
+    desc: "docs: /docs/solutions/* — search/observability/security solution guides (~750 pages)"
+    cmds:
+      - task: _download-docs
+        vars: {SCOPE: '/docs/solutions(/|$)'}
+
+  download:docs:deploy-manage:
+    desc: "docs: /docs/deploy-manage/* — deployment & administration (~730 pages)"
+    cmds:
+      - task: _download-docs
+        vars: {SCOPE: '/docs/deploy-manage(/|$)'}
+
+  download:docs:explore-analyze:
+    desc: "docs: /docs/explore-analyze/* — Kibana explore & visualize (~590 pages)"
+    cmds:
+      - task: _download-docs
+        vars: {SCOPE: '/docs/explore-analyze(/|$)'}
+
+  download:docs:extend:
+    desc: "docs: /docs/extend/* — extending the stack, dev tools (~240 pages)"
+    cmds:
+      - task: _download-docs
+        vars: {SCOPE: '/docs/extend(/|$)'}
+
+  download:docs:troubleshoot:
+    desc: "docs: /docs/troubleshoot/* (~210 pages)"
+    cmds:
+      - task: _download-docs
+        vars: {SCOPE: '/docs/troubleshoot(/|$)'}
+
+  download:docs:manage-data:
+    desc: "docs: /docs/manage-data/* — ingest/lifecycle/backup (~150 pages)"
+    cmds:
+      - task: _download-docs
+        vars: {SCOPE: '/docs/manage-data(/|$)'}
+
+  download:docs:release-notes:
+    desc: "docs: /docs/release-notes/* (~130 pages)"
+    cmds:
+      - task: _download-docs
+        vars: {SCOPE: '/docs/release-notes(/|$)'}
+
+  download:docs:get-started:
+    desc: "docs: /docs/get-started/* — small; quick smoke test of the mirror"
+    cmds:
+      - task: _download-docs
+        vars: {SCOPE: '/docs/get-started(/|$)'}
 
   download:containers:
     desc: Export image tars via skopeo container ({{.CONTAINER_PLATFORM}})

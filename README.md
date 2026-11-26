@@ -99,7 +99,8 @@ How it works:
 - Elastic publishes `https://www.elastic.co/docs/sitemap.xml` → ~14.7k canonical page URLs across `sitemap-docs` + `sitemap-api`. The pages are fully pre-rendered static HTML with same-host assets (`/docs/_static/*`, per-page `images/`), so `wget -p` captures a usable mirror — no docs-builder/toolchain needed.
 - Links in pages are absolute to `www.elastic.co` or root-relative, so they resolve verbatim once the vhost serves that name. External links (github.com, cloud.elastic.co) and site search (a server-side API) can't work offline — expected.
 - Re-runs are incremental: pages already on disk are skipped (delete a `.html` to force a refetch), and `task manifest:diff` / `package:delta` track whatever is new. Work state lives in `.build/docs-work/`.
-- Knobs (env): `DOCS_SCOPE` (regex over sitemap URLs — e.g. `'/docs/(reference|solutions)/'` to mirror only those sections), `DOCS_PARALLEL` (default 4), `DOCS_WAIT` (default 0.2s — the CDN fronts the site, stay polite). First full run is ~15k pages / several GB.
+- One task per sitemap section — they're additive over the same `dist/ear/docs/` tree, so you can mirror only what you deploy: `download:docs` (everything, ~15k pages), `download:docs:reference` (~7.3k), `:api` (~4.6k), `:solutions` (~750), `:deploy-manage` (~730), `:explore-analyze` (~590), `:extend` (~240), `:troubleshoot` (~210), `:manage-data` (~150), `:release-notes` (~130), `:get-started` (tiny — the smoke test).
+- Knobs (env): `DOCS_SCOPE` (raw regex over sitemap URLs if the section tasks don't fit), `DOCS_PARALLEL` (default 4), `DOCS_WAIT` (default 0.2s — the CDN fronts the site, stay polite).
 
 Serving it (`files/ear/Caddyfile`, `www.elastic.co` vhost):
 
