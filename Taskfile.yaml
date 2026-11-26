@@ -23,6 +23,8 @@ vars:
   CADDY_VERSION: latest             # static binary serving the EAR over HTTPS
   DIAG_VERSION: latest              # elastic/support-diagnostics release tag
   ML_MODELS: elser_model_2_linux-x86_64   # space-separated; see download_models.sh header
+  PAGEFIND_VERSION: "1.6.0"           # static search indexer for the docs mirror
+  DOCS_SEARCH: "1"                    # 0 disables the pagefind step in download:docs*
   DIST_DIR: dist
 
 tasks:
@@ -38,7 +40,7 @@ tasks:
       - task: package
 
   download:
-    desc: Download everything (EAR artifacts, integrations, containers, webserver, tools, feeds). Opt-in extras, excluded for size: download:docs[:<section>], download:models
+    desc: "Download everything (EAR artifacts, integrations, containers, webserver, tools, feeds). Opt-in extras, excluded for size: download:docs[:<section>], download:models"
     deps: [download:ear, download:integrations, download:containers, download:webserver, download:tools, download:feeds]
 
   download:ear:
@@ -88,6 +90,8 @@ tasks:
       OUT_DIR: "{{.DIST_DIR}}/ear"
       WORK_DIR: .build/docs-work
       DOCS_SCOPE: "{{.SCOPE}}"
+      PAGEFIND_VERSION: "{{.PAGEFIND_VERSION}}"
+      DOCS_SEARCH: "{{.DOCS_SEARCH}}"
     cmds: [./scripts/download_docs.sh]
 
   # One task per top-level section of the docs sitemap (page counts

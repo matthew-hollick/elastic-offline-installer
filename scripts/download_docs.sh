@@ -19,9 +19,13 @@
 #   <OUT_DIR>/docs/_static/main-<hash>.js
 #   <OUT_DIR>/docs/<section>/images/*.svg|png
 #
-# Won't work offline (expected): site search (server-side API), analytics /
-# captcha / shared-nav JS (third-party hosts), and links that leave
-# elastic.co (github.com, cloud.elastic.co).
+# Offline search is added at the end: a Pagefind static index (no server —
+# searching runs entirely in the browser) plus an injected search page at
+# /docs/search and a search link on every mirrored page.
+#
+# Won't work offline (expected): analytics / captcha / shared-nav JS
+# (third-party hosts) and links that leave elastic.co (github.com,
+# cloud.elastic.co).
 #
 # Knobs:
 #   DOCS_SCOPE     extended regex the sitemap URLs must match.
@@ -40,6 +44,8 @@ WORK_DIR="$(realpath -m "${WORK_DIR:-.build/docs-work}")"
 DOCS_SCOPE="${DOCS_SCOPE:-^https://www\.elastic\.co/docs/}"
 DOCS_PARALLEL="${DOCS_PARALLEL:-4}"
 DOCS_WAIT="${DOCS_WAIT:-0.2}"
+PAGEFIND_VERSION="${PAGEFIND_VERSION:-1.6.0}"
+DOCS_SEARCH="${DOCS_SEARCH:-1}"        # 0 disables the pagefind index step
 BASE="https://www.elastic.co"
 
 command -v wget >/dev/null || { echo "error: wget not found" >&2; exit 1; }
@@ -109,6 +115,68 @@ fi
 # mirror on a handful of 404s (upstream itself has dead links).
 grep -hE "ERROR|unable|failed" "$WORK_DIR"/chunk-*.log | sort | uniq -c | sort -rn | head -20 || true
 [[ $rc -eq 0 ]] || echo "warning: some pages failed to fetch (see $WORK_DIR/chunk-*.log); re-run to retry" >&2
+
+# --- offline search (Pagefind) ----------------------------------------------
+# Upstream's search is a server-side API — dead in the air-gap. Pagefind
+# builds a static index from the mirrored HTML; searching then happens
+# entirely in the browser with no backend. DOCS_SEARCH=0 skips this.
+if [[ "$DOCS_SEARCH" == "1" ]]; then
+  case "$(uname -m)" in
+    x86_64|amd64)  PF_ARCH=x86_64 ;;
+    aarch64|arm64) PF_ARCH=aarch64 ;;
+    *) echo "warning: no pagefind binary for $(uname -m); skipping index" >&2; PF_ARCH="" ;;
+  esac
+  if [[ -n "$PF_ARCH" ]]; then
+    PF_BIN="$WORK_DIR/pagefind/pagefind"
+    if [[ ! -x "$PF_BIN" ]]; then
+      mkdir -p "$WORK_DIR/pagefind"
+      pf_url="https://github.com/CloudCannon/pagefind/releases/download/v${PAGEFIND_VERSION}/pagefind-v${PAGEFIND_VERSION}-${PF_ARCH}-unknown-linux-musl.tar.gz"
+      echo "== downloading $pf_url"
+      curl --retry 3 -fsSL "$pf_url" | tar -xz -C "$WORK_DIR/pagefind"
+      chmod +x "$PF_BIN"
+    fi
+    echo "== indexing docs for offline search (pagefind $PAGEFIND_VERSION)"
+    "$PF_BIN" --site "$OUT_DIR/docs" >/dev/null
+
+    # A dedicated search page at /docs/search — upstream has no page there.
+    cat > "$OUT_DIR/docs/search.html" <<'SEARCH_EOF'
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search — Elastic Docs (offline mirror)</title>
+<link href="/docs/pagefind/pagefind-ui.css" rel="stylesheet">
+<style>
+  body { max-width: 46rem; margin: 2rem auto; padding: 0 1rem;
+         font-family: Inter, system-ui, sans-serif; color: #1a1a1a; }
+  .note { background: #fff3cd; border: 1px solid #ffe69c; border-radius: 6px;
+          padding: .6rem .9rem; font-size: .9rem; margin-bottom: 1.5rem; }
+</style>
+</head>
+<body>
+<h1>Search the docs</h1>
+<p class="note">Offline mirror — searches only the mirrored pages, in your
+browser. The upstream site's own search box does not work offline.</p>
+<div id="search"></div>
+<script src="/docs/pagefind/pagefind-ui.js"></script>
+<script>
+  new PagefindUI({ element: "#search", bundlePath: "/docs/pagefind/",
+                   showSubResults: true, showImages: false });
+</script>
+</body>
+</html>
+SEARCH_EOF
+
+    # The mirrored pages' built-in search button is dead offline; give every
+    # page a working link to ours (idempotent — skipped when marker present).
+    # grep -L exits 1 when a batch has nothing to report, which xargs turns
+    # into 123 — hence the || true.
+    find "$OUT_DIR/docs" -name '*.html' ! -name 'search.html' -print0 |
+      xargs -0 grep -L 'id="offline-docs-search"' |
+      xargs -r sed -i 's|</body>|<a id="offline-docs-search" href="/docs/search" style="position:fixed;right:1rem;bottom:1rem;z-index:9999;background:#0b64dd;color:#fff;padding:.45rem .8rem;border-radius:6px;font:14px/1.4 system-ui,sans-serif;text-decoration:none;box-shadow:0 1px 4px rgba(0,0,0,.3)">Search docs</a></body>|' || true
+  fi
+fi
 
 echo "== done: $(find "$OUT_DIR/docs" -name '*.html' | wc -l) pages in $OUT_DIR/docs"
 du -sh "$OUT_DIR/docs" | awk '{print "   size:", $1}'

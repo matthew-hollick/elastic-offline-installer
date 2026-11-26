@@ -58,6 +58,20 @@ control 'ear-docs-site' do
   end
 end
 
+control 'ear-docs-search' do
+  impact 0.5
+  title 'EAR serves the offline documentation search'
+  desc 'EAR serves the offline documentation search'
+  describe http("#{ear_base_url}/docs/search.html", ssl_verify: !skip_tls_verify) do
+    its('status') { should eq 200 }
+    its('body') { should match 'PagefindUI' }
+  end
+  describe http("#{ear_base_url}/docs/pagefind/pagefind-entry.json", ssl_verify: !skip_tls_verify) do
+    its('status') { should eq 200 }
+    its('body') { should match 'page_count' }
+  end
+end
+
 control 'ear-kev-feed' do
   impact 0.5
   title 'EAR serves the mirrored CISA KEV feed'
