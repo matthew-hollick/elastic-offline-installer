@@ -45,6 +45,19 @@ control 'ear-geoip-manifest' do
   end
 end
 
+control 'ear-docs-site' do
+  impact 0.5
+  title 'EAR serves the mirrored Elastic documentation site'
+  desc 'EAR serves the mirrored Elastic documentation site'
+  describe http("#{ear_base_url}/docs/index.html", ssl_verify: !skip_tls_verify) do
+    its('status') { should eq 200 }
+  end
+  describe http("#{ear_base_url}/docs/get-started/the-stack.html", ssl_verify: !skip_tls_verify) do
+    its('status') { should eq 200 }
+    its('body') { should match 'Elastic Stack' }
+  end
+end
+
 control 'ear-kev-feed' do
   impact 0.5
   title 'EAR serves the mirrored CISA KEV feed'

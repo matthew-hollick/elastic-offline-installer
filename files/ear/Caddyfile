@@ -35,3 +35,46 @@ https://ear.internal {
 http://ear.internal {
 	import ear-site
 }
+
+# --- Documentation mirror ----------------------------------------------------
+# scripts/download_docs.sh mirrors the rendered www.elastic.co/docs site into
+# the same docroot (paths preserved 1:1), so this vhost serves it under the
+# real hostname — Kibana 9.x doc links hardcode https://www.elastic.co/.
+#
+# DNS: point www.elastic.co (and elastic.co if desired) at this host.
+# TLS: elastic.co is on the HSTS preload list, so the certificate MUST be
+# trusted by clients — issue www.elastic.co from your internal CA and put
+# cert+chain and key under /opt/ear-web/tls/, or use `tls internal` and
+# distribute Caddy's root CA to endpoints.
+#
+# URLs in the mirrored pages are extensionless (/docs/get-started/the-stack)
+# while wget stores them as .html files — try_files bridges that.
+#
+# Legacy links (/guide/en/<book>/<ver>/...) appear throughout the stack's UI
+# and older docs. Upstream, many versioned guide URLs 404 or redirect into
+# /docs/; we replicate the useful redirects so Kibana's help links land
+# somewhere real.
+
+www.elastic.co {
+	tls /opt/ear-web/tls/www-elastic-co.pem /opt/ear-web/tls/www-elastic-co-key.pem
+	root * /opt/ear
+	encode zstd gzip
+
+	# Legacy /guide/ scheme -> docs site sections (mirrors upstream's own
+	# redirects where they exist).
+	redir /guide/en/elasticsearch/* /docs/reference/elasticsearch 301
+	redir /guide/en/kibana/* /docs/reference/kibana 301
+	redir /guide/en/fleet/* /docs/reference/fleet 301
+	redir /guide/en/security/* /docs/solutions/security 301
+	redir /guide/en/logstash/* /docs/reference/logstash 301
+	redir /guide/en/beats/* /docs/reference/beats 301
+	redir /guide/en/* /docs 301
+	redir /guide/* /docs 301
+
+	# Landing: send the site root at the docs landing page.
+	@root path /
+	redir @root /docs 302
+
+	try_files {path} {path}.html {path}/index.html
+	file_server
+}

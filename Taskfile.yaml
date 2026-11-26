@@ -81,6 +81,13 @@ tasks:
       OUT_DIR: "{{.DIST_DIR}}/ear/models"
     cmds: [./scripts/download_models.sh]
 
+  download:docs:
+    desc: "Mirror www.elastic.co/docs into dist/ear/docs (www.elastic.co vhost). Slow first run (~15k pages); DOCS_SCOPE/DOCS_PARALLEL/DOCS_WAIT tune it"
+    env:
+      OUT_DIR: "{{.DIST_DIR}}/ear"
+      WORK_DIR: .build/docs-work
+    cmds: [./scripts/download_docs.sh]
+
   download:containers:
     desc: Export image tars via skopeo container ({{.CONTAINER_PLATFORM}})
     env:

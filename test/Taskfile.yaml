@@ -88,7 +88,7 @@ tasks:
     desc: EAR controls against the dev stub
     deps: [inputs, stub]
     cmds:
-      - ../dist/audit/run.sh inputs.local.yml --controls ear-gpg-key ear-artifact-checksum ear-endpoint-artifacts ear-geoip-manifest ear-kev-feed {{.CLI_ARGS}}
+      - ../dist/audit/run.sh inputs.local.yml --controls ear-gpg-key ear-artifact-checksum ear-endpoint-artifacts ear-geoip-manifest ear-docs-site ear-kev-feed {{.CLI_ARGS}}
 
   auditor:epr:
     desc: EPR controls against the dev stub
