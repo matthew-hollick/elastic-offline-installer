@@ -59,8 +59,12 @@ for img in "${images[@]}"; do
     continue
   fi
   echo "exporting: $img"
+  # drop any partial .tar from a previously failed export; --retry-times
+  # covers transient registry failures the same way curl --retry-all-errors
+  # covers downloads
+  rm -f "$OUT_DIR/$name.tar"
   docker run --rm -v "$OUT_DIR:/out:Z" "$SKOPEO_IMAGE" \
-    copy --quiet --override-os "$os" --override-arch "$arch" \
+    copy --quiet --retry-times 3 --override-os "$os" --override-arch "$arch" \
     "docker://$img" "docker-archive:/out/$name.tar:$img"
   # gzip to .part and rename so a kill mid-gzip can't leave a truncated
   # tar.gz that the exists-check would skip forever
