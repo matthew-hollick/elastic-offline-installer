@@ -63,7 +63,7 @@ Or run the stages individually:
 task download                         # EAR artifacts + integrations + containers + webserver + tools + feeds
 task build                            # compiles package-registry (EPR)
 task build:integration -- https://github.com/FortytwoM/elastic-nessus-integration nessus
-task package                          # verify checksums + tar dist/ -> elastic-offline-bundle-<version>.tar.gz
+task package                          # verify checksums + tar dist/ -> elastic-offline-bundle-<version>-<date>-<NN>.tar.gz
 ```
 
 `task check:versions` compares the pinned `Taskfile.yaml` vars against upstream latest releases and exits non-zero if anything is behind — worth running before a bundle refresh. `latest`-pinned vars (caddy, diagnostics, EPR) report what they'd resolve to.
@@ -84,6 +84,8 @@ task package:delta     # tar ONLY new/changed artifacts -> elastic-offline-delta
 The workflow for shipping an update without re-sneakerneting 7 GB: bump a version var, `task download` (pulls only the new files), `task package:delta` — produces a small tar of just the new/changed artifacts plus `manifest-delta.json` (what this delta contains, which baseline it was diffed against), and refreshes `dist/manifest.json` as the new baseline. A delta can't delete files on the target — artifacts removed from `dist/` are listed as `missing` in the diff but the target keeps its stale copies until cleaned up there.
 
 `task clean` wipes `dist/` but **keeps `manifest.json`** as the baseline — so a clean → download → `package:delta` cycle still diffs against the last shipped bundle. Delete `dist/manifest.json` by hand to fully reset the record.
+
+Bundles are named `elastic-offline-bundle-<version>-<YYYY-MM-DD>-<NN>.tar.gz` — NN counts package runs that day, persisted in `.build/package-runs.json` (survives `clean`, resets each calendar day). The manifest inside each bundle records which bundle it was packaged into under `build`.
 
 ## Feeds
 

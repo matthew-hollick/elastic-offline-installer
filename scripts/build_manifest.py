@@ -7,11 +7,14 @@ every bundle, and acts as the baseline for `delta` — a bundle containing only
 artifacts that are new or changed since the manifest was last written.
 
 Subcommands:
-  scan    rewrite dist/manifest.json from the current files
-  diff    print what is new / changed / missing vs manifest.json
-  verify  re-hash everything and report drift vs manifest.json
-  delta   tar new+changed artifacts into elastic-offline-delta-*.tar.gz,
-          then refresh manifest.json as the new baseline
+  scan           rewrite dist/manifest.json from the current files
+  diff           print what is new / changed / missing vs manifest.json
+  verify         re-hash everything and report drift vs manifest.json
+  prepare-bundle write manifest.json and print the next bundle filename
+                 (elastic-offline-bundle-<ver>-<date>-<NN>.tar.gz; NN counts
+                 package runs that day, tracked in .build/package-runs.json)
+  delta          tar new+changed artifacts into elastic-offline-delta-*.tar.gz,
+                 then refresh manifest.json as the new baseline
 """
 import argparse
 import hashlib
@@ -24,6 +27,20 @@ from pathlib import Path
 MANIFEST = "manifest.json"
 DELTA_MANIFEST = "manifest-delta.json"
 EXCLUDE = {MANIFEST, DELTA_MANIFEST}
+RUNS_STATE = Path(".build/package-runs.json")
+
+
+def next_build_name(stack_version: str) -> tuple[str, dict]:
+    """Bump the daily run counter; return (bundle filename, build block)."""
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    state = {}
+    if RUNS_STATE.is_file():
+        state = json.loads(RUNS_STATE.read_text())
+    seq = state["seq"] + 1 if state.get("date") == today else 1
+    RUNS_STATE.parent.mkdir(parents=True, exist_ok=True)
+    RUNS_STATE.write_text(json.dumps({"date": today, "seq": seq}) + "\n")
+    name = f"elastic-offline-bundle-{stack_version}-{today}-{seq:02d}.tar.gz"
+    return name, {"date": today, "seq": seq, "bundle": name}
 
 
 def sha512_of(path: Path) -> str:
@@ -122,6 +139,14 @@ def cmd_verify(root: Path, args) -> int:
     return 1 if drift["changed"] or drift["missing"] else 0
 
 
+def cmd_prepare_bundle(root: Path, args) -> int:
+    name, build = next_build_name(args.stack_version)
+    write_manifest(root, scan_dist(root), args.stack_version,
+                   extra={"build": build})
+    print(name)  # stdout is captured by the Taskfile for the tar step
+    return 0
+
+
 def cmd_delta(root: Path, args) -> int:
     baseline = load_manifest(root)
     if baseline is None:
@@ -148,7 +173,7 @@ def cmd_delta(root: Path, args) -> int:
             "new": delta["new"],
             "changed": delta["changed"],
             "not_included_missing": delta["missing"],
-        }},
+        }} | ({"build": baseline["build"]} if baseline.get("build") else {}),
     )
     bundle = Path(f"elastic-offline-delta-{args.stack_version}-{stamp}.tar.gz")
     with tarfile.open(bundle, "w:gz") as tar:
@@ -157,7 +182,8 @@ def cmd_delta(root: Path, args) -> int:
             tar.add(root / rel, arcname=rel)
     print(f"wrote {bundle}: {len(payload)} artifacts "
           f"({len(delta['new'])} new, {len(delta['changed'])} changed)")
-    write_manifest(root, current, args.stack_version)
+    write_manifest(root, current, args.stack_version,
+                   extra={"build": baseline["build"]} if baseline.get("build") else None)
     print(f"== refreshed {root / MANIFEST} as the new baseline")
     return 0
 
@@ -168,15 +194,16 @@ def main() -> int:
     ap.add_argument("--dist", default="dist", type=Path)
     ap.add_argument("--stack-version", default="unknown")
     sub = ap.add_subparsers(dest="command", required=True)
-    for name in ("scan", "diff", "verify", "delta"):
+    for name in ("scan", "diff", "verify", "prepare-bundle", "delta"):
         sub.add_parser(name)
     args = ap.parse_args()
     if not args.dist.is_dir():
         print(f"error: {args.dist} does not exist — run `task download` first",
               file=sys.stderr)
         return 1
-    return {"scan": cmd_scan, "diff": cmd_diff,
-            "verify": cmd_verify, "delta": cmd_delta}[args.command](args.dist, args)
+    return {"scan": cmd_scan, "diff": cmd_diff, "verify": cmd_verify,
+            "prepare-bundle": cmd_prepare_bundle,
+            "delta": cmd_delta}[args.command](args.dist, args)
 
 
 if __name__ == "__main__":

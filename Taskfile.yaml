@@ -150,12 +150,13 @@ tasks:
       - python3 scripts/build_manifest.py --dist {{.DIST_DIR}} verify
 
   package:
-    desc: Verify, then tar dist/ into a transferable bundle (records manifest.json)
+    desc: Verify, then tar dist/ into a dated, numbered bundle (records manifest.json)
     deps: [verify]
+    vars:
+      BUNDLE: {sh: "python3 scripts/build_manifest.py --dist {{.DIST_DIR}} --stack-version {{.STACK_VERSION}} prepare-bundle"}
     cmds:
-      - task: manifest
-      - tar -czf elastic-offline-bundle-{{.STACK_VERSION}}.tar.gz -C {{.DIST_DIR}} .
-      - echo "wrote elastic-offline-bundle-{{.STACK_VERSION}}.tar.gz"
+      - tar -czf "{{.BUNDLE}}" -C {{.DIST_DIR}} .
+      - echo "wrote {{.BUNDLE}}"
 
   package:delta:
     desc: Tar only artifacts new/changed since the last packaged manifest
