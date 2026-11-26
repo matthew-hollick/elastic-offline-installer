@@ -1,7 +1,7 @@
 dist/
 .build/
-elastic-offline-bundle-*.tar.gz
-elastic-offline-delta-*.tar.gz
+elastic-offline-bundle-*.tar*
+elastic-offline-delta-*.tar*
 .venv/
 __pycache__/
 

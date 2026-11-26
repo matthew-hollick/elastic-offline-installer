@@ -155,7 +155,9 @@ tasks:
     vars:
       BUNDLE: {sh: "python3 scripts/build_manifest.py --dist {{.DIST_DIR}} --stack-version {{.STACK_VERSION}} prepare-bundle"}
     cmds:
-      - tar -czf "{{.BUNDLE}}" -C {{.DIST_DIR}} .
+      # no compression: dist/ is ~all pre-compressed content; gzip measured
+      # bigger than the input and minutes slower. `tar -I pigz` re-enables .gz
+      - tar -cf "{{.BUNDLE}}" -C {{.DIST_DIR}} .
       - echo "wrote {{.BUNDLE}}"
 
   package:delta:
@@ -171,4 +173,4 @@ tasks:
         if [ -d "{{.DIST_DIR}}" ]; then
           find "{{.DIST_DIR}}" -mindepth 1 -maxdepth 1 ! -name manifest.json -exec rm -rf {} +
         fi
-      - rm -f elastic-offline-bundle-*.tar.gz elastic-offline-delta-*.tar.gz
+      - rm -f elastic-offline-bundle-*.tar* elastic-offline-delta-*.tar*

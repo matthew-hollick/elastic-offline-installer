@@ -11,9 +11,9 @@ Subcommands:
   diff           print what is new / changed / missing vs manifest.json
   verify         re-hash everything and report drift vs manifest.json
   prepare-bundle write manifest.json and print the next bundle filename
-                 (elastic-offline-bundle-<ver>-<date>-<NN>.tar.gz; NN counts
+                 (elastic-offline-bundle-<ver>-<date>-<NN>.tar; NN counts
                  package runs that day, tracked in .build/package-runs.json)
-  delta          tar new+changed artifacts into elastic-offline-delta-*.tar.gz,
+  delta          tar new+changed artifacts into elastic-offline-delta-*.tar,
                  then refresh manifest.json as the new baseline
 """
 import argparse
@@ -39,7 +39,9 @@ def next_build_name(stack_version: str) -> tuple[str, dict]:
     seq = state["seq"] + 1 if state.get("date") == today else 1
     RUNS_STATE.parent.mkdir(parents=True, exist_ok=True)
     RUNS_STATE.write_text(json.dumps({"date": today, "seq": seq}) + "\n")
-    name = f"elastic-offline-bundle-{stack_version}-{today}-{seq:02d}.tar.gz"
+    # plain .tar — the payload is ~all pre-compressed/encrypted content,
+    # gzip on it measured bigger than the input and minutes slower
+    name = f"elastic-offline-bundle-{stack_version}-{today}-{seq:02d}.tar"
     return name, {"date": today, "seq": seq, "bundle": name}
 
 
@@ -175,8 +177,8 @@ def cmd_delta(root: Path, args) -> int:
             "not_included_missing": delta["missing"],
         }} | ({"build": baseline["build"]} if baseline.get("build") else {}),
     )
-    bundle = Path(f"elastic-offline-delta-{args.stack_version}-{stamp}.tar.gz")
-    with tarfile.open(bundle, "w:gz") as tar:
+    bundle = Path(f"elastic-offline-delta-{args.stack_version}-{stamp}.tar")
+    with tarfile.open(bundle, "w") as tar:
         tar.add(root / DELTA_MANIFEST, arcname=DELTA_MANIFEST)
         for rel in payload:
             tar.add(root / rel, arcname=rel)
