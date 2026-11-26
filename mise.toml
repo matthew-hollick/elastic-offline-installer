@@ -6,6 +6,7 @@ task = "latest"
 go = "latest"
 trivy = "latest"
 shellcheck = "latest"
+docker-compose = "latest"
 
 [env]
 _.python.venv = { path = ".venv", create = true }

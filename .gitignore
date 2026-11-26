@@ -3,3 +3,10 @@ dist/
 elastic-offline-bundle-*.tar.gz
 .venv/
 __pycache__/
+
+# local test cluster (generated creds, container state)
+test/elastic-start-local/
+test/inputs*.yml
+test/error-start-local.log
+test/*.html
+audit-report.html
