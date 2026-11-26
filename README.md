@@ -83,6 +83,8 @@ task package:delta     # tar ONLY new/changed artifacts -> elastic-offline-delta
 
 The workflow for shipping an update without re-sneakerneting 7 GB: bump a version var, `task download` (pulls only the new files), `task package:delta` — produces a small tar of just the new/changed artifacts plus `manifest-delta.json` (what this delta contains, which baseline it was diffed against), and refreshes `dist/manifest.json` as the new baseline. A delta can't delete files on the target — artifacts removed from `dist/` are listed as `missing` in the diff but the target keeps its stale copies until cleaned up there.
 
+`task clean` wipes `dist/` but **keeps `manifest.json`** as the baseline — so a clean → download → `package:delta` cycle still diffs against the last shipped bundle. Delete `dist/manifest.json` by hand to fully reset the record.
+
 ## Feeds
 
 `task download:feeds` mirrors third-party runtime feeds into `dist/ear/feeds/` so repointable integrations work air-gapped. Config is `files/feeds.json`; each entry has `name`, `type`, `url`, optional `dest` (relative to `feeds/`), `enabled`, `description` and `auth`.

@@ -164,6 +164,10 @@ tasks:
       - python3 scripts/build_manifest.py --dist {{.DIST_DIR}} --stack-version {{.STACK_VERSION}} delta
 
   clean:
-    desc: Remove dist/ and any bundle tarballs
+    desc: Remove dist/ and bundle tarballs (keeps manifest.json as the delta baseline)
     cmds:
-      - rm -rf {{.DIST_DIR}} elastic-offline-bundle-*.tar.gz
+      - |
+        if [ -d "{{.DIST_DIR}}" ]; then
+          find "{{.DIST_DIR}}" -mindepth 1 -maxdepth 1 ! -name manifest.json -exec rm -rf {} +
+        fi
+      - rm -f elastic-offline-bundle-*.tar.gz elastic-offline-delta-*.tar.gz
