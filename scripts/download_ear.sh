@@ -149,6 +149,14 @@ geo_dir="$OUT_DIR/geoip"
 mkdir -p "$geo_dir"
 manifest=$(curl -fsSL --retry 3 "https://geoip.elastic.co/v1/database?elastic_geoip_service_tos=agree")
 while IFS=$'\t' read -r name url md5; do
+  # GeoIP DBs are re-released upstream under a fixed filename, so an
+  # existing file is only kept when it still matches the manifest md5
+  if [[ -f "$geo_dir/$name" ]] \
+     && echo "$md5  $geo_dir/$name" | md5sum -c - >/dev/null 2>&1; then
+    echo "  exists: geoip/$name (md5 ok)"
+    continue
+  fi
+  rm -f "$geo_dir/$name"
   fetch "$url" "$geo_dir/$name"
   echo "$md5  $geo_dir/$name" | md5sum -c - >/dev/null \
     || { echo "error: md5 mismatch on $name" >&2; rm -f "$geo_dir/$name"; exit 1; }
