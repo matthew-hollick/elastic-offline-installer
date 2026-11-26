@@ -1,0 +1,97 @@
+version: '3'
+
+# Local test environment: start-local dev cluster + auditor smoke tests.
+#   task up            # start ES+Kibana 9.5.7 containers
+#   task auditor       # all controls (EAR/EPR via stub, ES/Kibana real)
+#   task auditor:es    # ES + Kibana controls only (no stub needed)
+#   task stub / stub:stop / down / uninstall
+
+vars:
+  STACK_VERSION: "9.5.7"
+
+tasks:
+  default:
+    cmds: [task --list]
+    silent: true
+
+  up:
+    desc: Start the ES+Kibana dev cluster (start-local, {{.STACK_VERSION}})
+    status:
+      # 401 = ES is up AND security is enabled; 000 = down
+      - '[ "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9200)" = "401" ]'
+    cmds:
+      - sh start-local.sh -v {{.STACK_VERSION}}
+
+  down:
+    desc: Stop the dev cluster (named volumes kept — data survives)
+    preconditions:
+      - sh: test -d elastic-start-local
+        msg: "no elastic-start-local/ — nothing was started here"
+    cmds:
+      - ./elastic-start-local/stop.sh
+
+  uninstall:
+    desc: Remove the dev cluster AND its data volumes
+    preconditions:
+      - sh: test -d elastic-start-local
+        msg: "no elastic-start-local/ — nothing was started here"
+    cmds:
+      - ./elastic-start-local/uninstall.sh
+
+  inputs:
+    desc: Generate inputs.local.yml from elastic-start-local/.env credentials
+    deps: [up]
+    sources: [elastic-start-local/.env]
+    generates: [inputs.local.yml]
+    cmds:
+      - |
+        . ./elastic-start-local/.env
+        cat > inputs.local.yml <<EOF
+        ear_url: http://127.0.0.1:9911
+        epr_url: http://127.0.0.1:9911
+        es_url: ${ES_LOCAL_URL:-http://localhost:9200}
+        kibana_url: http://localhost:${KIBANA_LOCAL_PORT:-5601}
+        stack_version: "{{.STACK_VERSION}}"
+        es_user: elastic
+        es_password: ${ES_LOCAL_PASSWORD}
+        insecure: true
+        EOF
+        echo "wrote inputs.local.yml (elastic password from .env)"
+
+  stub:
+    desc: Start the EAR/EPR dev stub on :9911 (serves ../dist/ear + canned EPR)
+    status:
+      - curl -fsS -o /dev/null http://127.0.0.1:9911/health
+    cmds:
+      - nohup env EAR_DIR=../dist/ear python3 stub.py > stub.log 2>&1 & echo $! > stub.pid
+      - sleep 1
+      - curl -fsS -o /dev/null http://127.0.0.1:9911/health && echo "stub up (pid $(cat stub.pid))"
+
+  stub:stop:
+    desc: Stop the EAR/EPR dev stub
+    cmds:
+      - test -f stub.pid && kill "$(cat stub.pid)" && rm stub.pid || echo "no stub.pid — not running via task"
+
+  auditor:
+    desc: Run ALL auditor controls (EAR/EPR stub + real ES/Kibana)
+    deps: [inputs, stub]
+    cmds:
+      - ../dist/audit/run.sh inputs.local.yml {{.CLI_ARGS}}
+
+  auditor:es:
+    desc: Elasticsearch + Kibana controls against the dev cluster
+    deps: [inputs]
+    cmds:
+      - ../dist/audit/run.sh inputs.local.yml --controls es-root es-cluster-health es-requires-auth kibana-status kibana-login-page {{.CLI_ARGS}}
+
+  auditor:ear:
+    desc: EAR controls against the dev stub
+    deps: [inputs, stub]
+    cmds:
+      - ../dist/audit/run.sh inputs.local.yml --controls ear-gpg-key ear-artifact-checksum ear-endpoint-artifacts ear-geoip-manifest ear-kev-feed {{.CLI_ARGS}}
+
+  auditor:epr:
+    desc: EPR controls against the dev stub
+    deps: [inputs, stub]
+    cmds:
+      - ../dist/audit/run.sh inputs.local.yml --controls epr-health epr-search epr-package-download {{.CLI_ARGS}}

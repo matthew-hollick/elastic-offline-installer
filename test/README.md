@@ -11,13 +11,22 @@ Local dev cluster per Elastic's [local-development quickstart](https://www.elast
 
 ## Use
 
+Everything runs from this dir via its own Taskfile (`cd test`):
+
 ```bash
-sh start-local.sh -v 9.5.7            # bring the cluster up (idempotent-ish; creates elastic-start-local/)
-EAR_DIR=dist/ear python3 test/stub.py &   # EAR/EPR stub on :9911
-dist/audit/run.sh test/inputs.local.yml   # 13 controls: stub EAR/EPR + real ES/Kibana
-elastic-start-local/stop.sh           # stop
-elastic-start-local/uninstall.sh      # remove containers + volumes
+task up              # start the ES+Kibana cluster (skips if ES already answers 401)
+task auditor         # all 13 controls: stub EAR/EPR + real ES/Kibana
+task auditor:es      # ES + Kibana controls only — no stub needed
+task auditor:ear     # EAR controls against the stub
+task auditor:epr     # EPR controls against the stub
+task stub:stop       # stop the stub
+task down            # stop the cluster (volumes kept)
+task uninstall       # remove containers AND volumes
 ```
+
+`task auditor*` auto-generates `inputs.local.yml` from `elastic-start-local/.env` (dependency chain `inputs → up`, so a cold run boots the cluster first) and auto-starts the stub when needed (`status` checks skip it if already listening). Extra args pass through to `cinc-auditor exec`: `task auditor -- --reporter cli junit:report.xml`.
+
+`stub.py` is also usable standalone: `EAR_DIR=dist/ear python3 test/stub.py` serves `dist/ear` plus canned EPR on :9911; to test a real deployed EAR/EPR instead, point `ear_url`/`epr_url` in `inputs.local.yml` at them.
 
 ## Verified
 
