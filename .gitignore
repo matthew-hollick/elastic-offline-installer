@@ -10,3 +10,6 @@ test/inputs*.yml
 test/error-start-local.log
 test/*.html
 audit-report.html
+test/.task/
+test/stub.pid
+test/stub.log
