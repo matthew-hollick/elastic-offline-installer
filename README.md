@@ -137,7 +137,7 @@ Remember to grant the `vulns-*` pattern in your ES roles — analysts' `logs-*` 
 
 ### Smoke testing
 
-`dist/audit/` is an [InSpec](https://www.inspec.io/)-compatible profile runnable by the bundled `cincproject/auditor` image (the Apache-2.0 community build — Chef InSpec itself went subscription-only). 13 controls verify the deployed endpoints: the EAR serves artifacts/checksums/GPG key/GeoIP manifest/KEV feed, the EPR answers `/health`/`/search` and serves a package zip, Elasticsearch answers `/` + `/_cluster/health` and rejects unauthenticated requests, and Kibana answers `/api/status` + `/login`.
+`dist/audit/` is an [InSpec](https://www.inspec.io/)-compatible profile runnable by the bundled `cincproject/auditor` image (the Apache-2.0 community build — Chef InSpec itself went subscription-only). 14 controls verify the deployed endpoints: the EAR serves artifacts/checksums/GPG key/GeoIP manifest/KEV feed, the EPR answers `/health`/`/search` and serves a package zip, Elasticsearch answers `/` + `/_cluster/health`, checks every node's disk usage is under the `flood_stage` watermark (percentage or absolute — whichever the cluster is configured with) and rejects unauthenticated requests, and Kibana answers `/api/status` + `/login`.
 
 ```bash
 cp dist/audit/inputs.example.yml dist/audit/inputs.yml   # fill in your hostnames + creds

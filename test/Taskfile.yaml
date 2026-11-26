@@ -82,7 +82,7 @@ tasks:
     desc: Elasticsearch + Kibana controls against the dev cluster
     deps: [inputs]
     cmds:
-      - ../dist/audit/run.sh inputs.local.yml --controls es-root es-cluster-health es-requires-auth kibana-status kibana-login-page {{.CLI_ARGS}}
+      - ../dist/audit/run.sh inputs.local.yml --controls es-root es-cluster-health es-disk-space es-requires-auth kibana-status kibana-login-page {{.CLI_ARGS}}
 
   auditor:ear:
     desc: EAR controls against the dev stub
