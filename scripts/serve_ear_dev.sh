@@ -47,7 +47,7 @@ cat > "$conf" <<EOF
 	@root path /
 	redir @root /docs 302
 	try_files {path} {path}.html {path}/index.html
-	file_server
+	file_server browse
 }
 EOF
 
