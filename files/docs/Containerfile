@@ -1,0 +1,24 @@
+# docs-builder toolchain image (linux/amd64 only — Elastic ships no arm64 build).
+#
+# Thin wrapper around the released native-AOT binary: upstream's runtime-deps
+# base (the base they publish the tool on) + git, which the CLI shells out to
+# when cloning the content repositories.
+#
+#   docker build --platform linux/amd64 --build-arg DOCS_BUILDER_VERSION=1.84.0 \
+#     -t docs-builder-offline:1.84.0 -f files/docs/Containerfile files/docs
+ARG DOCS_BUILDER_VERSION=1.84.0
+FROM mcr.microsoft.com/dotnet/runtime-deps:11.0
+
+ARG DOCS_BUILDER_VERSION
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates curl unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL -o /tmp/docs-builder.zip \
+      "https://github.com/elastic/docs-builder/releases/download/${DOCS_BUILDER_VERSION}/docs-builder-linux-x64.zip" \
+    && unzip -q /tmp/docs-builder.zip -d /opt/docs-builder \
+    && chmod +x /opt/docs-builder/docs-builder \
+    && ln -s /opt/docs-builder/docs-builder /usr/local/bin/docs-builder \
+    && rm /tmp/docs-builder.zip
+
+ENTRYPOINT ["docs-builder"]

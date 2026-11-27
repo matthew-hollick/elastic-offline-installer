@@ -44,6 +44,8 @@ vars:
   CADDY_VERSION: latest             # static binary serving the EAR over HTTPS
   DIAG_VERSION: latest              # elastic/support-diagnostics release tag
   ML_MODELS: elser_model_2_linux-x86_64   # space-separated; see download_models.sh header
+  DOCS_BUILDER_VERSION: "1.84.0"      # elastic/docs-builder release (linux/amd64 only)
+  DOCS_ENVIRONMENT: air-gapped        # assembler.yml environment for the docs build
   DIST_DIR: dist
 
 tasks:
@@ -59,7 +61,7 @@ tasks:
       - task: package
 
   download:
-    desc: "Download everything (EAR artifacts, integrations, containers, webserver, tools, feeds). Opt-in extra, excluded for size: download:models"
+    desc: "Download everything (EAR artifacts, integrations, containers, webserver, tools, feeds). Opt-in extras, excluded for size/arch: download:docs (amd64 only), download:models"
     deps: [download:ear, download:integrations, download:containers, download:webserver, download:tools, download:feeds]
 
   download:ear:
@@ -101,6 +103,15 @@ tasks:
       ML_MODELS: "{{.ML_MODELS}}"
       OUT_DIR: "{{.DIST_DIR}}/ear/models"
     cmds: [./scripts/download_models.sh]
+
+  download:docs:
+    desc: "Build the docs site via Elastic's docs-builder container (linux/amd64 hosts only — WSL box)"
+    env:
+      DOCS_BUILDER_VERSION: "{{.DOCS_BUILDER_VERSION}}"
+      DOCS_ENVIRONMENT: "{{.DOCS_ENVIRONMENT}}"
+      WORK_DIR: .build/docs-work
+      OUT_DIR: "{{.DIST_DIR}}/ear"
+    cmds: [./scripts/build_docs.sh]
 
   ear:dev:
     desc: "Serve dist/ear locally on :9988 — browse the EAR tree at http://localhost:9988/"

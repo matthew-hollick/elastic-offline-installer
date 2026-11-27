@@ -34,6 +34,7 @@ SOURCES = {
     "CADDY_VERSION": ("github", "caddyserver/caddy"),
     "DIAG_VERSION": ("github", "elastic/support-diagnostics"),
     "EPR_VERSION": ("github", "elastic/package-registry"),
+    "DOCS_BUILDER_VERSION": ("github", "elastic/docs-builder"),
 }
 
 
@@ -51,10 +52,11 @@ def taskfile_vars() -> dict:
             in_vars = True
             continue
         if in_vars:
+            if line.strip() and not line.startswith((" ", "\t")):
+                break  # dedented out of the vars block
             m = re.match(r"^  (\w+):\s*\"?([^\"\s]+)", line)
-            if not m:
-                break
-            vars_[m.group(1)] = m.group(2)
+            if m:
+                vars_[m.group(1)] = m.group(2)
     return vars_
 
 

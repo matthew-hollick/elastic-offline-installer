@@ -91,6 +91,20 @@ Bundles are named `elastic-offline-bundle-<version>-<YYYY-MM-DD>-<NN>.tar` — N
 
 Bundles are plain `.tar`, not `.tar.gz` — the payload is almost entirely pre-compressed/encrypted content (debs are xz inside, agent tarballs/zips, container tars, endpoint blobs), and gzip on it measured *larger* than the input while taking minutes longer. `tar -xf` unpacks it anywhere with zero extra tooling — which matters on air-gapped targets that may not have `zstd`/`pigz` to install.
 
+## Documentation mirror
+
+`task download:docs` builds the Elastic documentation site with Elastic's own [docs-builder](https://github.com/elastic/docs-builder) toolchain — the same assembler that produces www.elastic.co/docs — running in a container (`files/docs/Containerfile`, the released linux/amd64 AOT binary) and emitting the site into `dist/ear/` under the `docs/` path prefix.
+
+**linux/amd64 hosts only** — Elastic ships no arm64 build and the x64 binary crashes under qemu-user, so run this on the WSL/Windows box (the rest of the pipeline is arch-agnostic).
+
+- `assembler config init` fetches the central repo list, `assembler clone` pulls every configured content repository, `assembler build` emits the unified site. Clones persist under `.build/docs-work/` — re-runs only fetch changed refs; `DOCS_CLONE=0` skips the clone phase entirely for a fast rebuild.
+- The build runs under the **`air-gapped` environment** (`DOCS_ENVIRONMENT`) — upstream's own profile for disconnected builds (`AIR_GAPPED` feature flag, no indexing/search hooks).
+- `--skip-private-repositories` is on by default (a few repos in the config are private). Set `SKIP_PRIVATE=0` + `GITHUB_TOKEN` to include them — the token is used for the `git@→https` rewrite inside the container.
+- The git@→https origin rewrite happens via `GIT_CONFIG_*` env (same trick as upstream's `dev.sh`); no ssh client needed in the image.
+- Knobs (env): `DOCS_BUILDER_VERSION` (pinned release, also the image tag), `DOCS_ENVIRONMENT`, `DOCS_CLONE`, `SKIP_PRIVATE`, `GITHUB_TOKEN`.
+
+Serving it: the built site must be reachable *as `www.elastic.co`* (Kibana hardcodes that origin for doc links) — DNS-hijack the hostname at the EAR host plus a cert from the internal CA (`elastic.co` is HSTS-preloaded).
+
 ## Feeds
 
 `task download:feeds` mirrors third-party runtime feeds into `dist/ear/feeds/` so repointable integrations work air-gapped. Config is `files/feeds.json`; each entry has `name`, `type`, `url`, optional `dest` (relative to `feeds/`), `enabled`, `description` and `auth`.
