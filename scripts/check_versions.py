@@ -35,6 +35,8 @@ SOURCES = {
     "DIAG_VERSION": ("github", "elastic/support-diagnostics"),
     "EPR_VERSION": ("github", "elastic/package-registry"),
     "DOCS_BUILDER_VERSION": ("github", "elastic/docs-builder"),
+    "PANDOC_VERSION": ("github", "jgm/pandoc"),
+    "TYPST_VERSION": ("github", "typst/typst"),
 }
 
 

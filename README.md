@@ -105,6 +105,10 @@ Bundles are plain `.tar`, not `.tar.gz` — the payload is almost entirely pre-c
 
 Serving it: the built site must be reachable *as `www.elastic.co`* (Kibana hardcodes that origin for doc links) — DNS-hijack the hostname at the EAR host plus a cert from the internal CA (`elastic.co` is HSTS-preloaded).
 
+### Guide PDF
+
+`task docs:pdf` renders this README into a print-ready A4 PDF (`dist/docs/elastic-offline-installer-guide-<stack>.pdf`) — pandoc translates GFM to [Typst](https://typst.app), and `files/docs/guide.typst` supplies the theme (cover page, running headers, section numbering, styled code/tables). Markdown stays the canonical source; the PDF is a generated artifact that ships in the bundle as a printable operator runbook. Uses pandoc/typst from PATH, else downloads the pinned musl builds — works on both arm64 and amd64.
+
 ## Feeds
 
 `task download:feeds` mirrors third-party runtime feeds into `dist/ear/feeds/` so repointable integrations work air-gapped. Config is `files/feeds.json`; each entry has `name`, `type`, `url`, optional `dest` (relative to `feeds/`), `enabled`, `description` and `auth`.

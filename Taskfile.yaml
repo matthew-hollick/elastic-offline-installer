@@ -46,6 +46,8 @@ vars:
   ML_MODELS: elser_model_2_linux-x86_64   # space-separated; see download_models.sh header
   DOCS_BUILDER_VERSION: "1.84.0"      # elastic/docs-builder release (linux/amd64 only)
   DOCS_ENVIRONMENT: air-gapped        # assembler.yml environment for the docs build
+  PANDOC_VERSION: "3.14"              # md -> typst engine for the guide PDF (download pin)
+  TYPST_VERSION: "0.15.1"             # pdf typesetter (download pin; Rust, any arch)
   DIST_DIR: dist
 
 tasks:
@@ -112,6 +114,15 @@ tasks:
       WORK_DIR: .build/docs-work
       OUT_DIR: "{{.DIST_DIR}}/ear"
     cmds: [./scripts/build_docs.sh]
+
+  docs:pdf:
+    desc: "Render README.md to a print-ready A4 PDF (pandoc + typst) -> {{.DIST_DIR}}/docs/"
+    env:
+      STACK_VERSION: "{{.STACK_VERSION}}"
+      PANDOC_VERSION: "{{.PANDOC_VERSION}}"
+      TYPST_VERSION: "{{.TYPST_VERSION}}"
+      OUT_FILE: "{{.DIST_DIR}}/docs/elastic-offline-installer-guide-{{.STACK_VERSION}}.pdf"
+    cmds: [./scripts/build_guide_pdf.sh]
 
   ear:dev:
     desc: "Serve dist/ear locally on :9988 — browse the EAR tree at http://localhost:9988/"

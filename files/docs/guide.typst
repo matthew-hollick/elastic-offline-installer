@@ -1,0 +1,185 @@
+// Pandoc -> Typst theme for the offline-installer guide.
+// Injected via pandoc's typst template ($template$ import) — same `conf`
+// signature as the bundled template.typst, restyled.
+
+#let accent = rgb("#0b64dd")       // links + accents
+#let navy = rgb("#0f2a5c")         // headings, cover background
+#let brand-yellow = rgb("#fec514") // cover bar
+#let faint = rgb("#f4f6f8")        // code/table backgrounds
+#let ink = rgb("#555c66")          // header/footer text
+
+#let content-to-string(content) = {
+  if content.has("text") {
+    content.text
+  } else if content.has("children") {
+    content.children.map(content-to-string).join("")
+  } else if content.has("body") {
+    content-to-string(content.body)
+  } else if content == [ ] {
+    " "
+  }
+}
+
+#let conf(
+  title: none,
+  subtitle: none,
+  authors: (),
+  keywords: (),
+  date: none,
+  abstract-title: none,
+  abstract: none,
+  thanks: none,
+  cols: 1,
+  margin: (x: 22mm, y: 24mm),
+  paper: "a4",
+  lang: "en",
+  region: "US",
+  font: none,
+  fontsize: 10.5pt,
+  mathfont: none,
+  codefont: none,
+  linestretch: 1,
+  sectionnumbering: none,
+  linkcolor: none,
+  citecolor: none,
+  filecolor: none,
+  pagenumbering: "1",
+  doc,
+) = {
+  set document(
+    title: title,
+    keywords: keywords,
+  )
+  set document(
+    author: authors.map(author => content-to-string(author.name)).join(", ", last: " & "),
+  ) if authors != none and authors != ()
+
+  // --- page furniture ----------------------------------------------------
+  set page(
+    paper: paper,
+    margin: margin,
+    numbering: pagenumbering,
+    columns: cols,
+    header: context {
+      if counter(page).get().first() > 1 {
+        set text(size: 8pt, fill: ink)
+        let heads = query(selector(heading).before(here()))
+        stack(
+          dir: ttb,
+          spacing: 4pt,
+          grid(
+            columns: (1fr, auto),
+            [#title],
+            [#if heads != () { heads.last().body }],
+          ),
+          line(length: 100%, stroke: 0.4pt + rgb("#ccd2d9")),
+        )
+      }
+    },
+    footer: context {
+      if counter(page).get().first() > 1 {
+        set text(size: 8pt, fill: ink)
+        grid(
+          columns: (1fr, auto),
+          [Elastic Offline Installer],
+          [#counter(page).display("1")],
+        )
+      }
+    },
+  )
+
+  set par(justify: true, leading: linestretch * 0.65em)
+  set text(lang: lang, region: region, size: fontsize)
+  set text(font: font) if font != none
+  show math.equation: set text(font: mathfont) if mathfont != none
+  show raw: set text(font: codefont) if codefont != none
+  set heading(numbering: sectionnumbering)
+
+  // --- element styling ---------------------------------------------------
+  show link: set text(fill: accent)
+
+  show heading.where(level: 1): it => {
+    pagebreak(weak: true)
+    set text(fill: navy, size: 1.5em, weight: "bold")
+    block(above: 1.6em, below: 1em)[
+      #it
+      #v(3pt)
+      #line(length: 100%, stroke: 1.1pt + brand-yellow)
+    ]
+  }
+  show heading.where(level: 2): it => {
+    set text(fill: navy, size: 1.25em, weight: "bold")
+    block(above: 1.4em, below: 0.8em)[
+      #it
+      #v(2pt)
+      #line(length: 100%, stroke: 0.6pt + accent)
+    ]
+  }
+  show heading.where(level: 3): it => {
+    set text(fill: navy, size: 1.05em, weight: "bold")
+    block(above: 1.2em, below: 0.6em, it)
+  }
+
+  show raw.where(block: true): it => block(
+    width: 100%,
+    fill: faint,
+    stroke: (left: 2pt + accent),
+    radius: 2pt,
+    inset: 9pt,
+    text(size: 0.82em, it),
+  )
+  show raw.where(block: false): it => box(
+    fill: rgb("#eef1f4"),
+    inset: (x: 3pt, y: 0pt),
+    outset: (y: 2.5pt),
+    radius: 2pt,
+    it,
+  )
+
+  show table: it => block(width: 100%)[
+    #set table(
+      inset: 7pt,
+      stroke: (x, y) => if y == 0 {
+        (bottom: 1.1pt + navy)
+      } else {
+        (bottom: 0.4pt + rgb("#dde1e6"))
+      },
+      fill: (x, y) => if y == 0 { rgb("#eef4fd") },
+    )
+    #it
+  ]
+  show table.cell.where(y: 0): set text(weight: "semibold")
+
+  // TOC gets its own page — body starts fresh after it.
+  show outline: it => {
+    it
+    pagebreak()
+  }
+
+  // --- cover page --------------------------------------------------------
+  if title != none {
+    page(
+      fill: navy,
+      margin: (x: 24mm, top: 30mm, bottom: 22mm),
+      numbering: none,
+      header: none,
+      footer: none,
+    )[
+      #v(18mm)
+      #rect(width: 52mm, height: 2.6mm, fill: brand-yellow, stroke: none)
+      #v(12mm)
+      #text(fill: white, size: 2.4em, weight: "bold", hyphenate: false)[#title]
+      #(if subtitle != none {
+        v(6mm)
+        text(fill: rgb("#bcd2f0"), size: 1.15em)[#subtitle]
+      })
+      #v(1fr)
+      #(if date != none {
+        text(fill: rgb("#8fb0dd"), size: 0.95em)[#date]
+      })
+    ]
+    counter(page).update(1) // cover is uncounted -> TOC page shows 1
+  }
+
+  doc
+}
