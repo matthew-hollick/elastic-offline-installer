@@ -12,14 +12,35 @@ vars:
   TARGET_ARCH: amd64              # target servers (amd64|arm64); dev laptop is arm
   EPR_VERSION: latest             # package-registry git tag
   SNMP_EXPORTER_VERSION: v0.31.0
-  TRIVY_VERSION: v0.76.2              # docker tag is the gh tag without the 'v'
+  TRIVY_VERSION: "0.76.2"             # docker-tag form (gh tag adds the 'v')
   CHECKOV_VERSION: 3.4.6
   KSM_VERSION: v2.20.0                # kube-state-metrics (registry.k8s.io)
   GITLAB_RUNNER_VERSION: v19.6.0      # tag: gitlab/gitlab-runner:ubuntu-<ver>
   GITLAB_RUNNER_FLAVOR: ubuntu        # ubuntu|alpine
   AUDITOR_VERSION: 7.3.4              # cincproject/auditor (Chef InSpec, open)
   VENOM_VERSION: v1.3.0               # ovhcom/venom integration-test runner
+  SKOPEO_VERSION: v1.25.1             # quay.io/skopeo/stable tag (lags gh releases); also the puller bootstrap
+  BUILDAH_VERSION: v1.46.1
   CONTAINER_PLATFORM: linux/amd64
+  # Managed containers: <project>:<local-name>:<upstream-ref>:<tag> per line.
+  #   project     -> dist/containers/<project>/ AND the Harbor project on push
+  #   local-name  -> <local>-<tag>.tar.gz filename AND Harbor repo name
+  #   upstream-ref-> registry/repo/path (no tag)
+  #   tag         -> literal tag (templated from the version vars above)
+  # Custom-built images (e.g. EPR) live under download:containers:custom:*.
+  CONTAINERS: |
+    elastic:elastic-agent:docker.elastic.co/elastic-agent/elastic-agent:{{.STACK_VERSION}}
+    elastic:logstash:docker.elastic.co/logstash/logstash:{{.STACK_VERSION}}
+    elastic:elastic-maps-server:docker.elastic.co/elastic-maps-service/elastic-maps-server-ubi:{{.STACK_VERSION}}
+    monitoring:snmp-exporter:prom/snmp-exporter:{{.SNMP_EXPORTER_VERSION}}
+    monitoring:kube-state-metrics:registry.k8s.io/kube-state-metrics/kube-state-metrics:{{.KSM_VERSION}}
+    security:trivy:aquasec/trivy:{{.TRIVY_VERSION}}
+    security:checkov:bridgecrew/checkov:{{.CHECKOV_VERSION}}
+    ci:gitlab-runner:gitlab/gitlab-runner:{{.GITLAB_RUNNER_FLAVOR}}-{{.GITLAB_RUNNER_VERSION}}
+    audit:auditor:cincproject/auditor:{{.AUDITOR_VERSION}}
+    audit:venom:ovhcom/venom:{{.VENOM_VERSION}}
+    tools:skopeo:quay.io/skopeo/stable:{{.SKOPEO_VERSION}}
+    tools:buildah:quay.io/buildah/stable:{{.BUILDAH_VERSION}}
   CADDY_VERSION: latest             # static binary serving the EAR over HTTPS
   DIAG_VERSION: latest              # elastic/support-diagnostics release tag
   ML_MODELS: elser_model_2_linux-x86_64   # space-separated; see download_models.sh header
@@ -170,35 +191,29 @@ tasks:
     cmds: [./scripts/serve_ear_dev.sh]
 
   download:containers:
-    desc: Export image tars via skopeo container ({{.CONTAINER_PLATFORM}})
+    desc: Export the managed container set (see CONTAINERS var) via skopeo ({{.CONTAINER_PLATFORM}})
     env:
-      STACK_VERSION: "{{.STACK_VERSION}}"
-      SNMP_EXPORTER_VERSION: "{{.SNMP_EXPORTER_VERSION}}"
-      TRIVY_VERSION: "{{.TRIVY_VERSION}}"
-      CHECKOV_VERSION: "{{.CHECKOV_VERSION}}"
-      KSM_VERSION: "{{.KSM_VERSION}}"
-      GITLAB_RUNNER_VERSION: "{{.GITLAB_RUNNER_VERSION}}"
-      GITLAB_RUNNER_FLAVOR: "{{.GITLAB_RUNNER_FLAVOR}}"
-      AUDITOR_VERSION: "{{.AUDITOR_VERSION}}"
-      VENOM_VERSION: "{{.VENOM_VERSION}}"
+      CONTAINERS: "{{.CONTAINERS}}"
       CONTAINER_PLATFORM: "{{.CONTAINER_PLATFORM}}"
+      SKOPEO_IMAGE: "quay.io/skopeo/stable:{{.SKOPEO_VERSION}}"
       OUT_DIR: "{{.DIST_DIR}}/containers"
     cmds: [./scripts/save_containers.sh]
 
-  build:
-    desc: Build all components
-    deps: [build:epr, build:epr-image]
-
-  build:epr-image:
-    desc: "EPR distribution image (registry+packages) via buildah container"
+  download:containers:custom:epr:
+    desc: "Build the EPR distribution image (registry+packages) via buildah container"
     deps: [download:integrations]
     env:
       STACK_VERSION: "{{.STACK_VERSION}}"
       CONTAINER_PLATFORM: "{{.CONTAINER_PLATFORM}}"
       EPR_VERSION: "{{.EPR_VERSION}}"
-      OUT_DIR: "{{.DIST_DIR}}/containers"
+      BUILDAH_IMAGE: "quay.io/buildah/stable:{{.BUILDAH_VERSION}}"
+      OUT_DIR: "{{.DIST_DIR}}/containers/elastic"
       PACKAGES_DIR: "{{.DIST_DIR}}/epr/packages"
     cmds: [./scripts/build_epr_image.sh]
+
+  build:
+    desc: Build all components
+    deps: [build:epr, download:containers:custom:epr]
 
   build:integration:
     desc: "Build a custom integration zip. Usage: task build:integration -- <git-url> [subdir] [ref]"

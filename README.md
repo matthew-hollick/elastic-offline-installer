@@ -27,7 +27,9 @@ We need to build an EPR (Elastic Package Registry — [source](https://github.co
 - A systemd service definition
 - Packages come from https://epr.elastic.co — the [Elastic integrations catalog](https://www.elastic.co/docs/reference/integrations)
 
-There are additional containers that we need to bring with us:
+The managed set is the `CONTAINERS` var in `Taskfile.yaml` — one `<project>:<local-name>:<upstream-ref>:<tag>` per line, where `project` is both the `dist/containers/<project>/` dir and the Harbor project it pushes to. Add a line to add a container; custom-built images have their own `download:containers:custom:*` tasks.
+
+The containers we bring with us:
 - Elastic Agent (also covers containerised [Fleet Server](https://www.elastic.co/docs/reference/fleet/fleet-server) — there is no separate fleet-server image)
 - [Logstash](https://www.elastic.co/docs/reference/logstash)
 - Elastic Maps Server (`elastic-maps-server-ubi`, for [offline Kibana maps](https://www.elastic.co/guide/en/kibana/current/maps-connect-to-ems.html))
@@ -46,7 +48,7 @@ Plus tools in `dist/tools/`:
 - [`elastic-package`](https://github.com/elastic/elastic-package) (linux/amd64) — for building custom integrations on the offline side ([package-spec](https://github.com/elastic/package-spec))
 - `import_cvelist.py` — bulk-loads the mirrored cvelistV5 corpus into an ES index as ECS `vulnerability.*` docs (see [Feeds](#feeds); run with `--help` for options incl. the enrich-policy example)
 - `vulnscan.py` + `vulnscan.service`/`.timer` — centrally scans osquery package inventory with the trivy container and writes findings to `vulns-default` (see [Vulnerability scanning](#vulnerability-scanning))
-- `push_containers.sh` — loads every `dist/containers/*.tar.gz` on a docker host and pushes them to a Harbor registry, preserving upstream repo paths under your project (`docker.elastic.co/elastic-agent/elastic-agent:9.5.7` → `harbor.local/<project>/elastic-agent/elastic-agent:9.5.7`)
+- `push_containers.sh` — loads every `dist/containers/<project>/*.tar.gz` on a docker host and pushes each to its Harbor project under the local name (`security/trivy-0.76.2.tar.gz` → `harbor.local/security/trivy:0.76.2`; dry-run with `-n`)
 - `dist/audit/` — a [Cinc Auditor](https://cinc.sh/) (open InSpec) smoke-test profile for the deployed EAR/EPR/Elasticsearch/Kibana endpoints — see [Smoke testing](#smoke-testing)
 
 ## Building the bundle
@@ -207,8 +209,8 @@ Alternative: `ti_custom` also has a `filestream` input that reads a STIX bundle/
 - `rsync -a dist/web/ /opt/ear-web/` — Caddy binary + `Caddyfile` + `ear.service` (create the `caddy` user per the unit comments; edit the hostname in `Caddyfile` to match the cert SAN)
 - TLS certificates are issued inside the offline environment — install them at deploy time: `cat server.crt ca-chain.pem > /opt/ear-web/tls/cert.pem` and `key.pem` alongside (0600, owned by `caddy`). Caddy [`tls` directive](https://caddyserver.com/docs/caddyfile/directives/tls) for details.
 - `rsync -a dist/epr/ /opt/epr/` — package-registry binary + `config.yml` + `epr.service` + `packages/` (create the `epr` user). Point Fleet at it via [`xpack.fleet.registryUrl`/`registryUrl` in kibana.yml](https://www.elastic.co/docs/reference/kibana/configuration-reference/fleet-settings)
-- `dist/containers/elastic-epr-<version>.tar.gz` — alternative EPR deployment as a container (Elastic's recommended "distribution" image: registry + all packages baked in): `gunzip -c elastic-epr-<version>.tar.gz | docker load` then run with the registry port published (see the podman/systemd example in [Elastic's air-gapped docs](https://www.elastic.co/docs/reference/fleet/air-gapped))
-- `dist/containers/` -> `gunzip -c <file>.tar.gz | docker load`, or push them all to a registry in one pass: `HARBOR=harbor.local HARBOR_PROJECT=elastic dist/tools/push_containers.sh` (dry-run with `-n`)
+- `dist/containers/elastic/elastic-epr-<version>.tar.gz` — alternative EPR deployment as a container (Elastic's recommended "distribution" image: registry + all packages baked in; `task download:containers:custom:epr`): `gunzip -c elastic-epr-<version>.tar.gz | docker load` then run with the registry port published (see the podman/systemd example in [Elastic's air-gapped docs](https://www.elastic.co/docs/reference/fleet/air-gapped))
+- `dist/containers/<project>/` -> `gunzip -c <file>.tar.gz | docker load`, or push them all to a registry in one pass — the dir name is the Harbor project: `HARBOR=harbor.local dist/tools/push_containers.sh` (dry-run with `-n`)
 - Fleet agent binary download source: `<scheme>://<ear-fqdn>/downloads/` (trailing slash matters — agents append `beats/...` to it)
 - Elastic Defend: in each Defend integration policy's advanced settings, set `advanced.artifacts.global.base_url` (and its `<os>.advanced.artifacts.global.base_url` variants) to `<scheme>://<ear-fqdn>` — agents then fetch `/downloads/endpoint/...` for detection signatures/models (see [offline endpoints guide](https://www.elastic.co/docs/solutions/security/configure-elastic-defend/configure-offline-endpoints-air-gapped-environments)). The `ETag` header is mandatory for artifact updates; Caddy's `file_server` sends it by default.
 - CISA KEVs integration: set the `url` variable to `<scheme>://<ear-fqdn>/feeds/cisa/known_exploited_vulnerabilities.json` (the `url` var is exposed in the [integration's configuration](https://www.elastic.co/docs/reference/integrations/cisa_kevs)); note the mirrored file is a point-in-time snapshot
