@@ -19,7 +19,6 @@ We need to build out an EAR (Elastic Artifact Registry) for hosting on a webserv
 - `geoip/` — GeoLite2 .tgz databases + a rewritten `database.json` manifest for `ingest.geoip.downloader.endpoint` ([ingest/geoip settings](https://www.elastic.co/docs/reference/elasticsearch/configuration-reference/ingest-settings), [geoip processor](https://www.elastic.co/docs/reference/enrich-processor/geoip-processor)) — many integrations' geoip/enrich pipelines fail silently without this
 - `models/` — ML trained-model artifacts (opt-in, big): `task download:models` with `ML_MODELS` defaulting to `elser_model_2_linux-x86_64` (275 MB). Available: `elser_model_2` (438 MB, cross-platform), `multilingual-e5-small[_linux-x86_64]` (423–482 MB), `rerank-v1` (777 MB). See [ELSER](https://www.elastic.co/docs/explore-analyze/machine-learning/nlp/ml-nlp-elser) (incl. the air-gapped deployment section) and [ML settings](https://www.elastic.co/docs/reference/elasticsearch/configuration-reference/machine-learning-settings)
 - `feeds/` — third-party runtime feeds mirrored by `task download:feeds` (config: `files/feeds.json`, see [Feeds](#feeds) below): `feeds/cisa/known_exploited_vulnerabilities.json` for the [CISA KEVs integration](https://www.elastic.co/docs/reference/integrations/cisa_kevs), and `feeds/taxii/<name>.json` — TAXII 2.x collections flattened to `{"objects": [...]}` for [ti_custom](https://www.elastic.co/docs/reference/integrations/ti_custom). All snapshots — refresh by re-running and redeploying
-- `docs/` — a static mirror of the Elastic documentation site (`task download:docs`, see [Documentation mirror](#documentation-mirror) below), served by the EAR as `www.elastic.co` so Kibana's doc links work offline
 
 We need to build an EPR (Elastic Package Registry — [source](https://github.com/elastic/package-registry))
 - Consider https://github.com/elastic/custom-epr-builder but I want to run outside of Docker so that I can easilly add new integrations as they become available.
@@ -91,28 +90,6 @@ The workflow for shipping an update without re-sneakerneting 7 GB: bump a versio
 Bundles are named `elastic-offline-bundle-<version>-<YYYY-MM-DD>-<NN>.tar` — NN counts package runs that day, persisted in `.build/package-runs.json` (survives `clean`, resets each calendar day). The manifest inside each bundle records which bundle it was packaged into under `build`.
 
 Bundles are plain `.tar`, not `.tar.gz` — the payload is almost entirely pre-compressed/encrypted content (debs are xz inside, agent tarballs/zips, container tars, endpoint blobs), and gzip on it measured *larger* than the input while taking minutes longer. `tar -xf` unpacks it anywhere with zero extra tooling — which matters on air-gapped targets that may not have `zstd`/`pigz` to install.
-
-## Documentation mirror
-
-`task download:docs` mirrors the rendered `www.elastic.co/docs` site into `dist/ear/docs/` so the EAR can serve it under the real hostname — Kibana 9.x hardcodes `https://www.elastic.co/` for its doc links (`@kbn/doc-links`), so no kibana.yml setting can repoint them; serving the real hostname via DNS is the clean answer.
-
-How it works:
-
-- Elastic publishes `https://www.elastic.co/docs/sitemap.xml` → ~14.7k canonical page URLs across `sitemap-docs` + `sitemap-api`. The pages are fully pre-rendered static HTML with same-host assets (`/docs/_static/*`, per-page `images/`), so `wget -p` captures a usable mirror — no docs-builder/toolchain needed.
-- Links in pages are absolute to `www.elastic.co` or root-relative, so they resolve verbatim once the vhost serves that name. External links (github.com, cloud.elastic.co) can't work offline — expected.
-- **Search**: upstream's doc search is a server-side API, so the mirror builds a [Pagefind](https://pagefind.app) static index (`PAGEFIND_VERSION`) — searching runs entirely in the browser, no backend. A search page lives at `/docs/search` and every mirrored page gets a "Search docs" link injected before `</body>` (idempotent). `DOCS_SEARCH=0` skips indexing.
-- Re-runs are incremental: pages already on disk are skipped (delete a `.html` to force a refetch), and `task manifest:diff` / `package:delta` track whatever is new. Work state lives in `.build/docs-work/`.
-- One task per sitemap section — they're additive over the same `dist/ear/docs/` tree, so you can mirror only what you deploy: `download:docs` (everything, ~15k pages), `download:docs:reference` (~7.3k), `:api` (~4.6k), `:solutions` (~750), `:deploy-manage` (~730), `:explore-analyze` (~590), `:extend` (~240), `:troubleshoot` (~210), `:manage-data` (~150), `:release-notes` (~130), `:get-started` (tiny — the smoke test).
-- Knobs (env): `DOCS_SCOPE` (raw regex over sitemap URLs if the section tasks don't fit), `DOCS_PARALLEL` (default 4), `DOCS_WAIT` (default 0.2s — the CDN fronts the site, stay polite).
-
-Serving it (`files/ear/Caddyfile`, `www.elastic.co` vhost):
-
-- DNS: point `www.elastic.co` at the EAR host.
-- TLS is the one hard requirement: `elastic.co` is on the HSTS preload list, so browsers will not accept a self-signed cert. Issue a `www.elastic.co` cert from the environment's internal CA (drop it at `/opt/ear-web/tls/www-elastic-co*.pem`) — or use `tls internal` and distribute Caddy's root CA to endpoints.
-- `try_files {path} {path}.html` bridges extensionless doc URLs to the `.html` files wget stores; `/` redirects to `/docs`.
-- Legacy `/guide/en/<book>/...` links (emitted by the stack UI and older docs — many of which 404 upstream anyway) are redirected to the matching `/docs/` section, replicating upstream's own redirects where they exist.
-
-This also fixes links that are broken *upstream*: versioned `/guide/en/elasticsearch/reference/9.5/` URLs Kibana emits 404 on the real site but land on real docs pages here.
 
 ## Feeds
 
